@@ -366,6 +366,54 @@ function computeStatus(legs) {
   return { arrivalState: arr, departureState: dep, missing: missing, incomplete: incomplete,
            complete: arr === "complete" && dep === "complete" };
 }
+
+/* ---- client mirror of WebLogic per-member coverage (keep in sync) ----
+   A member is covered for a direction only if their name is on a COMPLETE
+   (date+time) leg in that direction. A leg whose "Who" is blank / "everyone" /
+   "all[ N][ of us]" covers the whole roster. Free-typed names that match no roster
+   member don't count toward coverage. ---- */
+function normName(s) { return String(s == null ? "" : s).toLowerCase().replace(/\s+/g, " ").trim(); }
+function whoMeansEveryone(who) {
+  var w = normName(who);
+  if (w === "") return true;
+  return /^(everyone|everybody|whole family|entire family|full family|the family|family|us|all( \d+)?( of us)?)$/.test(w);
+}
+function legNames(leg, roster) {
+  var names = (roster || []).map(function (m) { return String((m && m.name) || ""); })
+    .filter(function (n) { return n.trim() !== ""; });
+  if (whoMeansEveryone(leg && leg.who)) return names.slice();
+  var toks = {};
+  String((leg && leg.who) || "").split(/[,;&+]|\band\b/i).forEach(function (p) { var t = normName(p); if (t) toks[t] = true; });
+  return names.filter(function (n) { return toks[normName(n)]; });
+}
+function computeCoverage(legs, roster) {
+  roster = (roster || []).filter(function (m) { return String((m && m.name) || "").trim() !== ""; });
+  var total = roster.length;
+  if (total === 0) return { hasRoster: false, total: 0, arrCovered: 0, depCovered: 0,
+    missingArrival: [], missingDeparture: [], complete: false };
+  var arrSet = {}, depSet = {};
+  (legs || []).forEach(function (l) {
+    if (legComplete(l) !== "complete") return;
+    var dir = normName(l && l.direction);
+    legNames(l, roster).forEach(function (n) {
+      var k = normName(n);
+      if (dir === "arrival") arrSet[k] = true; else if (dir === "departure") depSet[k] = true;
+    });
+  });
+  var missArr = [], missDep = [];
+  roster.forEach(function (m) { var k = normName(m.name);
+    if (!arrSet[k]) missArr.push(m.name); if (!depSet[k]) missDep.push(m.name); });
+  return { hasRoster: true, total: total, arrCovered: total - missArr.length, depCovered: total - missDep.length,
+           missingArrival: missArr, missingDeparture: missDep,
+           complete: missArr.length === 0 && missDep.length === 0 };
+}
+function joinNames(names) {
+  names = (names || []).filter(function (n) { return String(n || "").trim() !== ""; });
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return names[0] + " and " + names[1];
+  return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+}
 function fatal(m) { hide("loading"); $("fatalMsg").textContent = m; show("fatal"); }
 function msg(el, text, kind) { el.textContent = text; el.className = "msg show " + kind; }
 function clearMsg(el) { el.className = "msg"; }
@@ -459,8 +507,7 @@ function applyTravel(d) {
     state.legs.push(blankLeg("Arrival"));
     state.legs.push(blankLeg("Departure"));
   }
-  renderStatus(d.travelStatus);
-  renderLegs();
+  renderLegs();   // calls refreshLiveStatus() -> coverage-aware top pill
 }
 
 function gateLoad(secret, onMsgEl, after) {
@@ -521,6 +568,28 @@ function renderStatus(st) {
   var el = $("status");
   if (!st) { hide("status"); return; }
   show("status");
+
+  // Per-member coverage takes priority when we know the roster (the common case):
+  // it catches the "one person filed complete plans, the rest of the family hasn't"
+  // gap that a leg-only view misses.
+  if (st.coverage && st.coverage.hasRoster) {
+    var cov = st.coverage;
+    if (cov.complete) {
+      el.className = "status done";
+      el.innerHTML = "✓ Everyone has an <b>arrival</b> and a <b>departure</b> — with dates &amp; times. Thank you! You can still edit below.";
+      return;
+    }
+    el.className = "status need";
+    var cparts = [];
+    if (cov.missingArrival.length)
+      cparts.push("<b>arrival</b> plans for <b>" + esc(joinNames(cov.missingArrival)) + "</b>");
+    if (cov.missingDeparture.length)
+      cparts.push("<b>departure</b> plans for <b>" + esc(joinNames(cov.missingDeparture)) + "</b>");
+    el.innerHTML = "We still need " + cparts.join(", and ") +
+      " — with dates &amp; times. Tick who's on each journey below.";
+    return;
+  }
+
   if (st.complete) {
     el.className = "status done";
     el.innerHTML = "✓ We have your <b>arrival</b> and <b>departure</b> — with dates &amp; times. Thank you! You can still edit below.";
@@ -550,7 +619,11 @@ function renderLegs() {
 
 /* Recompute the top pill from the CURRENT (unsaved) legs. Called after every edit so
    the guest sees progress without pressing Save. */
-function refreshLiveStatus() { renderStatus(computeStatus(state.legs)); }
+function refreshLiveStatus() {
+  var st = computeStatus(state.legs);
+  st.coverage = computeCoverage(state.legs, state.roster);
+  renderStatus(st);
+}
 
 /* Which roster names are currently named in this leg's "who" string. */
 function whoSelected(whoStr) {
@@ -698,8 +771,21 @@ $("saveBtn").addEventListener("click", function () {
         return;
       }
       var st = d.travelStatus || {};
+      var cov = (d.summary && d.summary.coverage) || null;
       var html = "Your travel plans are saved.";
-      if (st.complete) {
+      if (cov && cov.hasRoster) {
+        // Per-member coverage: tell the guest exactly WHO still needs plans.
+        if (cov.complete) {
+          html += "<br>Everyone has an <b>arrival</b> and a <b>departure</b> — with dates &amp; times ✓";
+        } else {
+          var cbits = [];
+          if (cov.missingArrival && cov.missingArrival.length)
+            cbits.push("<b>arrival</b> plans for <b>" + esc(joinNames(cov.missingArrival)) + "</b>");
+          if (cov.missingDeparture && cov.missingDeparture.length)
+            cbits.push("<b>departure</b> plans for <b>" + esc(joinNames(cov.missingDeparture)) + "</b>");
+          if (cbits.length) html += "<br>Still to do: add " + cbits.join(", and ") + " (with dates &amp; times).";
+        }
+      } else if (st.complete) {
         html += "<br>We have your <b>arrival</b> and <b>departure</b> — with dates &amp; times ✓";
       } else {
         var bits = [];
