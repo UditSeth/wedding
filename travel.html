@@ -172,6 +172,13 @@
   .status.need{ background:rgba(178,58,72,.08); color:var(--warn); border-color:rgba(178,58,72,.28); }
   .status.done{ background:rgba(47,125,79,.1); color:var(--ok); border-color:rgba(47,125,79,.3); }
 
+  /* per-journey inline hint (what this card still needs) -------------- */
+  .leghint{ font-family:var(--serif); font-style:italic; font-size:14px; color:var(--ink-soft);
+            margin:2px 0 8px; min-height:1em; transition:color .2s; }
+  .leghint:empty{ display:none; }
+  .leghint.ok{ color:var(--ok); font-style:normal; }
+  .leghint.warn{ color:#8a6d20; }
+
   /* buttons ------------------------------------------------------------ */
   button{ font-family:var(--sans); font-size:15px; font-weight:600; letter-spacing:.03em;
           border:none; border-radius:12px; padding:15px 18px; cursor:pointer; transition:transform .15s, box-shadow .25s, filter .25s; }
@@ -264,9 +271,9 @@
   <!-- Step 2: travel legs -->
   <div id="form" class="card hidden">
     <h2 id="formTitle">Your journeys</h2>
-    <p class="hint" style="margin-bottom:4px;">Please tell us <b>when you arrive</b> and <b>when you leave</b>. This helps us
-       arrange your room and any pickups. Members travelling together share one journey — add a separate journey for anyone
-       arriving or leaving apart.</p>
+    <p class="hint" style="margin-bottom:4px;">Please tell us <b>when you arrive</b> and <b>when you leave</b> —
+       including the <b>date &amp; time</b> of each, so we can arrange your room and any pickups. Members travelling
+       together share one journey; add a separate journey for anyone arriving or leaving apart.</p>
     <div id="status" class="status hidden"></div>
 
     <div id="legs"></div>
@@ -305,6 +312,60 @@ var state = { legs: [], removeLegIds: [], roster: [], secret: "" };
 
 function show(id) { $(id).classList.remove("hidden"); }
 function hide(id) { $(id).classList.add("hidden"); }
+
+/* ---- client-side mirror of WebLogic.legCompleteness (keep in sync) ----
+   A journey only helps us plan a room/pickup once we know WHEN it is, so a
+   direction alone is not enough. Returns 'complete' (direction+date+time),
+   'partial' (started but no date and/or time), or 'bare' (direction only). ---- */
+function present(v) { return v !== null && v !== undefined && String(v).trim() !== ""; }
+function legComplete(l) {
+  var dir = String((l && l.direction) || "").trim().toLowerCase();
+  if (dir !== "arrival" && dir !== "departure") return "bare";
+  var hasDate = present(l && l.date), hasTime = present(l && l.time);
+  if (hasDate && hasTime) return "complete";
+  var hasOther = present(l && l.who) || (Number(l && l.people) > 0) || present(l && l.mode) ||
+    present(l && l.carrier) || present(l && l.place) || present(l && l.notes);
+  if (hasDate || hasTime || hasOther) return "partial";
+  return "bare";
+}
+/* Per-card guidance: shows what a single journey still needs, so a guest doesn't
+   discover missing date/time only at Save time. Uses textContent (no HTML injection). */
+function updateLegHint(cardEl, leg) {
+  var el = cardEl.querySelector('[data-role=leghint]');
+  if (!el) return;
+  var c = legComplete(leg);
+  if (c === "complete") { el.textContent = "✓ All set for this journey."; el.className = "leghint ok"; return; }
+  if (c === "bare") {
+    el.textContent = leg.direction ? "Add the date & time (and any travel details) below."
+                                   : "Choose Arrival or Departure to begin.";
+    el.className = "leghint"; return;
+  }
+  // partial — name exactly what's missing
+  var need = [];
+  if (!present(leg.date)) need.push("date");
+  if (!present(leg.time)) need.push("time");
+  el.textContent = need.length ? "Almost there — please add the " + need.join(" & ") + "."
+                               : "Almost there — add a few more details.";
+  el.className = "leghint warn";
+}
+
+/* Family rollup from the current (unsaved) legs, mirroring WebLogic.travelStatus,
+   so the top pill updates LIVE as the guest edits — no save needed. */
+function computeStatus(legs) {
+  var rank = { none: 0, bare: 0, partial: 1, complete: 2 };
+  var arr = "none", dep = "none";
+  (legs || []).forEach(function (l) {
+    var c = legComplete(l); if (c === "bare") return;
+    var dir = String(l.direction || "").trim().toLowerCase();
+    if (dir === "arrival") { if (rank[c] > rank[arr]) arr = c; }
+    else if (dir === "departure") { if (rank[c] > rank[dep]) dep = c; }
+  });
+  var missing = [], incomplete = [];
+  if (arr === "none") missing.push("Arrival"); else if (arr === "partial") incomplete.push("Arrival");
+  if (dep === "none") missing.push("Departure"); else if (dep === "partial") incomplete.push("Departure");
+  return { arrivalState: arr, departureState: dep, missing: missing, incomplete: incomplete,
+           complete: arr === "complete" && dep === "complete" };
+}
 function fatal(m) { hide("loading"); $("fatalMsg").textContent = m; show("fatal"); }
 function msg(el, text, kind) { el.textContent = text; el.className = "msg show " + kind; }
 function clearMsg(el) { el.className = "msg"; }
@@ -448,15 +509,31 @@ $("againBtn").addEventListener("click", function () {
     .catch(function () { clearMsg(fm); });
 });
 
-/* ---- travel status pill ---- */
+/* ---- travel status pill ----
+   A journey is only "done" once it carries a date AND a time (that's what lets us
+   plan the room + pickup). So we distinguish three things per direction:
+     • missing    — no usable journey yet → please ADD it
+     • incomplete — started, but the date and/or time is blank → please FINISH it
+     • complete   — date + time on file
+   `st.owed` = directions not yet complete; `st.missing` ⊂ owed = not-yet-added;
+   `st.incomplete` ⊂ owed = added-but-unfinished. ---- */
 function renderStatus(st) {
   var el = $("status");
   if (!st) { hide("status"); return; }
   show("status");
-  if (st.complete) { el.className = "status done"; el.innerHTML = "✓ We have both your arrival and departure — thank you! You can still edit below."; }
-  else { el.className = "status need";
-    el.innerHTML = "We still need your <b>" + esc((st.missing || []).join(" and ")) + "</b> — please add " +
-      ((st.missing || []).length > 1 ? "them" : "it") + " below."; }
+  if (st.complete) {
+    el.className = "status done";
+    el.innerHTML = "✓ We have your <b>arrival</b> and <b>departure</b> — with dates &amp; times. Thank you! You can still edit below.";
+    return;
+  }
+  el.className = "status need";
+  var parts = [];
+  var missing = st.missing || [], incomplete = st.incomplete || [];
+  if (missing.length)
+    parts.push("please add your <b>" + esc(missing.join(" and ")) + "</b>");
+  if (incomplete.length)
+    parts.push("please add the <b>date &amp; time</b> for your <b>" + esc(incomplete.join(" and ")) + "</b>");
+  el.innerHTML = "Almost there — " + parts.join(", and ") + " below.";
 }
 
 /* ---- render the editable leg list ---- */
@@ -468,7 +545,12 @@ function renderLegs() {
   var box = $("legs"); box.innerHTML = "";
   if (state.legs.length === 0) state.legs.push(blankLeg("Arrival"));
   state.legs.forEach(function (l, i) { box.appendChild(legNode(l, i)); });
+  refreshLiveStatus();
 }
+
+/* Recompute the top pill from the CURRENT (unsaved) legs. Called after every edit so
+   the guest sees progress without pressing Save. */
+function refreshLiveStatus() { renderStatus(computeStatus(state.legs)); }
 
 /* Which roster names are currently named in this leg's "who" string. */
 function whoSelected(whoStr) {
@@ -498,6 +580,7 @@ function legNode(l, i) {
 
   div.innerHTML =
     '<div class="head"><b>Journey ' + (i + 1) + '</b>' + dirBadge + '</div>' +
+    '<div class="leghint" data-role="leghint"></div>' +
     '<div class="row">' +
       '<div><label>Direction</label>' + dirSel + '</div>' +
       '<div><label>Travel mode</label>' + modeSel + '</div>' +
@@ -533,11 +616,17 @@ function legNode(l, i) {
       state.legs[i][f] = e.target.value;
       if (f === "direction") { // refresh the badge without a full re-render losing focus elsewhere
         renderLegs();
+      } else {
+        updateLegHint(div, state.legs[i]);   // live per-card "what's left" hint
+        refreshLiveStatus();                 // live top-of-form pill
       }
     });
   });
   var peopleEl = div.querySelector('[data-f=people]');
-  peopleEl.addEventListener("input", function (e) { state.legs[i].people = Number(e.target.value) || 0; });
+  peopleEl.addEventListener("input", function (e) {
+    state.legs[i].people = Number(e.target.value) || 0;
+    updateLegHint(div, state.legs[i]); refreshLiveStatus();
+  });
 
   // roster chips: toggle a name in/out of the "who" string + keep people in sync
   var grid = div.querySelector('[data-role=whogrid]');
@@ -554,6 +643,7 @@ function legNode(l, i) {
         // reflect into the free-text + number fields
         div.querySelector('[data-f=who]').value = state.legs[i].who;
         peopleEl.value = state.legs[i].people ? state.legs[i].people : "";
+        updateLegHint(div, state.legs[i]); refreshLiveStatus();
       });
     });
   }
@@ -565,6 +655,7 @@ function legNode(l, i) {
     state.legs.splice(i, 1);
     renderLegs();
   });
+  updateLegHint(div, l);   // seed the per-card hint on first render
   return div;
 }
 function opt(v, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + '>' + esc(v) + '</option>'; }
@@ -608,8 +699,15 @@ $("saveBtn").addEventListener("click", function () {
       }
       var st = d.travelStatus || {};
       var html = "Your travel plans are saved.";
-      if (st.complete) html += "<br>We have both your <b>arrival</b> and <b>departure</b> ✓";
-      else if (st.missing && st.missing.length) html += "<br>Still to add: <b>" + esc(st.missing.join(" and ")) + "</b>.";
+      if (st.complete) {
+        html += "<br>We have your <b>arrival</b> and <b>departure</b> — with dates &amp; times ✓";
+      } else {
+        var bits = [];
+        if (st.missing && st.missing.length) bits.push("add your <b>" + esc(st.missing.join(" and ")) + "</b>");
+        if (st.incomplete && st.incomplete.length)
+          bits.push("add the <b>date &amp; time</b> for your <b>" + esc(st.incomplete.join(" and ")) + "</b>");
+        if (bits.length) html += "<br>Still to do: " + bits.join(", and ") + ".";
+      }
       $("doneMsg").innerHTML = html;
       hide("form"); reveal("done");
     })
