@@ -240,7 +240,7 @@
     <div class="monogram">💍</div>
     <p class="eyebrow" id="eyebrow">Together with their families</p>
     <h1>You're <em>Invited</em></h1>
-    <p class="dates" id="dates">Wedding Functions · 30<sup>th</sup> &amp; 31<sup>st</sup> August</p>
+    <p class="dates" id="dates">Wedding Celebrations · August 2026</p>
     <div class="rule"><span>❧</span></div>
   </header>
 
@@ -378,7 +378,14 @@ function personalizeHeader(surname, events) {
   else if (has30)     when = d30 + " August";
   else                when = "30<sup>th</sup> &amp; 31<sup>st</sup> August";   // unknown -> both
   var single = (has30 && !has31) || (has31 && !has30);
-  $("dates").innerHTML = (single ? "Wedding Function · " : "Wedding Functions · ") + when;
+  var el = $("dates");
+  // gentle cross-fade so filling in the real day(s) reads as "loaded", not a glitch
+  el.style.transition = "opacity .35s ease";
+  el.style.opacity = "0";
+  setTimeout(function () {
+    el.innerHTML = (single ? "Wedding Function · " : "Wedding Functions · ") + when;
+    el.style.opacity = "1";
+  }, 200);
 }
 
 /* ---- boot: fetch current family state ---- */
