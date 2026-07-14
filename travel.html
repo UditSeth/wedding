@@ -78,15 +78,20 @@
   header{ text-align:center; padding:44px 12px 8px; color:var(--cream); position:relative; }
   .arch{ position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:0;
          width:min(520px,86vw); opacity:.4; pointer-events:none; color:var(--gold2); }
-  .monogram{
-    position:relative; z-index:1;
-    width:80px; height:80px; margin:0 auto 14px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center; font-size:32px;
-    background:radial-gradient(circle at 35% 30%, #fff4d8, var(--gold) 72%);
-    color:var(--navy); box-shadow:0 10px 30px -8px rgba(216,179,85,.7), inset 0 0 0 2px rgba(255,255,255,.4);
-    animation:pop .9s cubic-bezier(.22,1,.36,1) both;
-  }
+  /* Royal emblem medallion — shared with home.html + rsvp.html for a cohesive set. */
+  .emblem{ position:relative; z-index:1; width:96px; height:96px; margin:0 auto 12px; border-radius:50%;
+           animation:emblemIn 1.1s cubic-bezier(.22,1,.36,1) both, glow 5s ease-in-out 1.1s infinite;
+           filter:drop-shadow(0 8px 20px rgba(0,0,0,.4)); }
+  .emblem svg{ width:100%; height:100%; display:block; border-radius:50%; }
+  @keyframes emblemIn{ 0%{ transform:scale(.4) rotate(-12deg); opacity:0; } 100%{ transform:none; opacity:1; } }
+  @keyframes glow{ 0%,100%{ filter:drop-shadow(0 8px 20px rgba(0,0,0,.4)); }
+                   50%{ filter:drop-shadow(0 8px 26px rgba(216,179,85,.6)); } }
   @keyframes pop{ 0%{ transform:scale(.4); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
+
+  /* reveal-on-scroll — gentle entrance for headings/intro as they appear */
+  .reveal{ opacity:0; transform:translateY(22px); transition:opacity .8s ease, transform .8s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in{ opacity:1; transform:none; }
+  .reveal.d1{ transition-delay:.08s; } .reveal.d2{ transition-delay:.16s; }
   .hero-deva{ font-family:var(--deva); color:var(--gold-soft); font-size:15px; letter-spacing:.06em;
               opacity:.9; margin:0 0 2px; animation:rise .8s ease .02s both; }
   .eyebrow{ font-family:var(--sans); letter-spacing:.4em; text-transform:uppercase;
@@ -232,6 +237,21 @@
   .spin p{ font-family:var(--serif); font-style:italic; font-size:18px; letter-spacing:.04em; }
 
   .center{ text-align:center; }
+
+  /* "Back to invitation" nav — present on every view; carries the family through.
+     Hidden until the server hands us a homeUrl (blank when HOME_PAGE_URL unset). */
+  .topnav{ position:relative; z-index:2; max-width:680px; margin:0 auto; padding:14px 18px 0;
+           display:none; }
+  .topnav.show{ display:block; }
+  .navhome{ display:inline-flex; align-items:center; gap:8px; font-family:var(--sans);
+            font-size:13px; font-weight:500; letter-spacing:.04em; color:var(--gold-soft);
+            text-decoration:none; padding:8px 15px 8px 12px; border-radius:30px;
+            background:rgba(255,255,255,.06); border:1px solid rgba(216,179,85,.35);
+            transition:background .25s, border-color .25s, color .25s, transform .15s; cursor:pointer; }
+  .navhome:hover{ background:rgba(216,179,85,.16); border-color:var(--gold2); color:#fff; }
+  .navhome:active{ transform:translateY(1px); }
+  .navhome .chev{ font-size:16px; line-height:1; }
+
   #done .seal{ font-size:46px; animation:pop .8s cubic-bezier(.22,1,.36,1) both; }
   footer{ text-align:center; color:rgba(234,223,191,.6); font-family:var(--serif);
           font-style:italic; font-size:14px; padding:8px 0 4px; }
@@ -239,11 +259,18 @@
     *{ animation-duration:.001s !important; animation-iteration-count:1 !important; }
     .petals{ display:none; }
     html{ scroll-behavior:auto; }
+    .reveal{ opacity:1 !important; transform:none !important; transition:none !important; }
   }
 </style>
 </head>
 <body>
 <div class="petals" id="petals" aria-hidden="true"></div>
+
+<nav id="topnav" class="topnav">
+  <a id="navHome" class="navhome" href="#" role="button">
+    <span class="chev" aria-hidden="true">‹</span> Back to invitation
+  </a>
+</nav>
 
 <div class="wrap">
   <header>
@@ -251,7 +278,31 @@
       <path d="M20 300 V110 Q20 30 120 24 Q260 12 260 12 Q260 12 400 24 Q500 30 500 110 V300"/>
       <path d="M40 300 V116 Q40 46 130 40 Q260 30 260 30 Q260 30 390 40 Q480 46 480 116 V300" opacity=".55"/>
     </svg>
-    <div class="monogram">✈</div>
+    <div class="emblem" aria-hidden="true">
+      <!-- Gold medallion with the auspicious ॐ — shared with the home invitation page. -->
+      <svg viewBox="0 0 120 120" role="img" aria-label="Auspicious emblem">
+        <defs>
+          <radialGradient id="coin" cx="38%" cy="32%" r="75%">
+            <stop offset="0%" stop-color="#fce7b0"/><stop offset="42%" stop-color="#d8b355"/><stop offset="100%" stop-color="#a67c1f"/>
+          </radialGradient>
+          <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f4dd93"/><stop offset="100%" stop-color="#9a6f1b"/>
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r="58" fill="url(#ring)"/>
+        <circle cx="60" cy="60" r="52" fill="url(#coin)"/>
+        <circle cx="60" cy="60" r="52" fill="none" stroke="#8a6216" stroke-width="1" opacity=".5"/>
+        <g fill="#8a6216" opacity=".55">
+          <circle cx="60" cy="12" r="1.7"/><circle cx="84" cy="18.5" r="1.7"/><circle cx="101.5" cy="36" r="1.7"/>
+          <circle cx="108" cy="60" r="1.7"/><circle cx="101.5" cy="84" r="1.7"/><circle cx="84" cy="101.5" r="1.7"/>
+          <circle cx="60" cy="108" r="1.7"/><circle cx="36" cy="101.5" r="1.7"/><circle cx="18.5" cy="84" r="1.7"/>
+          <circle cx="12" cy="60" r="1.7"/><circle cx="18.5" cy="36" r="1.7"/><circle cx="36" cy="18.5" r="1.7"/>
+        </g>
+        <path d="M60 26 Q56 32 60 36 Q64 32 60 26 M52 28 Q52 34 58 36 M68 28 Q68 34 62 36"
+              fill="none" stroke="#7a5713" stroke-width="1.4" stroke-linecap="round" opacity=".7"/>
+        <text x="60" y="82" text-anchor="middle" font-family="'Tiro Devanagari Hindi', serif" font-size="52" fill="#5a3f0e">ॐ</text>
+      </svg>
+    </div>
     <p class="hero-deva" id="heroDeva">शुभ यात्रा</p>
     <p class="eyebrow" id="eyebrow">Together with their families</p>
     <h1>Your <em>Travel</em></h1>
@@ -273,8 +324,8 @@
 
   <!-- Step 1: affirmation + secret gate -->
   <div id="gate" class="card hidden">
-    <h2>Is this your family?</h2>
-    <p id="affirm" class="sub"></p>
+    <h2 class="reveal">Is this your family?</h2>
+    <p id="affirm" class="sub reveal d1"></p>
     <label for="secret">Family access code</label>
     <input id="secret" type="text" autocomplete="off" autocapitalize="characters"
            placeholder="e.g. SHARMA12345" />
@@ -286,8 +337,8 @@
 
   <!-- Step 2: travel legs -->
   <div id="form" class="card hidden">
-    <h2 id="formTitle">Your journeys</h2>
-    <p class="hint" style="margin-bottom:4px;">Tell us <b>when you arrive</b> and <b>when you leave</b> —
+    <h2 id="formTitle" class="reveal">Your journeys</h2>
+    <p class="hint reveal d1" style="margin-bottom:4px;">Tell us <b>when you arrive</b> and <b>when you leave</b> —
        with the <b>date &amp; time</b> of each, so we can have your room ready. Everything below assumes your
        family travels together; if someone comes or leaves separately, just add a journey for them.</p>
     <div id="status" class="status hidden"></div>
@@ -301,9 +352,9 @@
 
   <!-- Step 3: done -->
   <div id="done" class="card hidden center">
-    <div class="seal">🧳</div>
-    <h2>Thank you!</h2>
-    <p id="doneMsg" class="sub"></p>
+    <div class="seal reveal">🧳</div>
+    <h2 class="reveal d1">Thank you!</h2>
+    <p id="doneMsg" class="sub reveal d2"></p>
     <button id="againBtn" class="link">Make another change</button>
   </div>
 
@@ -324,10 +375,26 @@ var familyKey = new URLSearchParams(location.search).get("family") || "";
 // legs: {legId,direction,who,people,mode,carrier,place,date,time,needsPickup,notes}
 // expectedCount = family headcount (Total) when the roster has no NAMED members;
 // 0 when named (per-member coverage drives it). Sent by the server on travelLoad.
-var state = { legs: [], removeLegIds: [], roster: [], secret: "", expectedCount: 0 };
+var state = { legs: [], removeLegIds: [], roster: [], secret: "", expectedCount: 0, homeUrl: "", dirty: false };
 
 function show(id) { $(id).classList.remove("hidden"); }
 function hide(id) { $(id).classList.add("hidden"); }
+
+/* ---- "Back to invitation" nav (point 5) --------------------------------
+   The home page is public, so the server sends a family-scoped homeUrl even
+   pre-secret. Reveal the nav once we have it. If the guest is mid-edit (the form
+   is open and they've changed something since the last save), confirm before we
+   leave so an accidental tap can't drop unsaved changes. ---------- */
+function setHomeUrl(d) {
+  if (d && d.homeUrl && !state.homeUrl) {
+    state.homeUrl = String(d.homeUrl);
+    $("topnav").classList.add("show");
+  }
+}
+function markDirty() { state.dirty = true; }
+function isEditing() {
+  return !$("form").classList.contains("hidden") && state.dirty === true;
+}
 function sameDir(a, b) { return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase(); }
 function namedRosterCount() {
   return state.roster.filter(function (m) { return String((m && m.name) || "").trim() !== ""; }).length;
@@ -469,8 +536,36 @@ function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function
 
 function reveal(id) {
   show(id); var el = $(id);
+  armReveals(el);
   try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {}
 }
+
+/* ---- reveal-on-appear: gently fade/rise .reveal elements when a card is shown.
+        Without IntersectionObserver, everything is shown immediately. ---- */
+function armReveals(scope) {
+  var root = scope || document;
+  var els = root.querySelectorAll ? root.querySelectorAll(".reveal:not(.in)") : [];
+  if (!("IntersectionObserver" in window)) {
+    Array.prototype.forEach.call(els, function (e) { e.classList.add("in"); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+  }, { threshold: .12, rootMargin: "0px 0px -6% 0px" });
+  Array.prototype.forEach.call(els, function (e) { io.observe(e); });
+}
+
+$("navHome").addEventListener("click", function (e) {
+  e.preventDefault();
+  if (!state.homeUrl) return;
+  if (isEditing() &&
+      !confirm("Leave this page and go back to the invitation? Your unsaved travel changes will be lost.")) return;
+  state.dirty = false;                 // leaving on purpose — silence beforeunload
+  location.href = state.homeUrl;
+});
+window.addEventListener("beforeunload", function (e) {
+  if (isEditing()) { e.preventDefault(); e.returnValue = ""; return ""; }
+});
 
 /* ---- personalise the header: surname + the day(s) the family is invited to ---- */
 function personalizeHeader(surname, events) {
@@ -505,11 +600,12 @@ if (!familyKey) {
       if (!d || !d.ok) { fatal(d && d.error === "not found"
         ? "We couldn't find your family for this link." : "Something went wrong loading your details."); return; }
       state.surname = d.surname; state.headName = d.headName; state.events = d.events || "";
+      setHomeUrl(d);
       personalizeHeader(d.surname, d.events);
       $("affirm").innerHTML = "You are the <b>" + esc(d.surname || "—") + "</b> family" +
         (d.headName ? ", head: <b>" + esc(d.headName) + "</b>" : "") + "?";
       $("formTitle").textContent = (d.surname ? d.surname + " family — your journeys" : "Your journeys");
-      show("gate");
+      show("gate"); armReveals($("gate"));
     })
     .catch(function () { fatal("Network error — please check your connection and retry."); });
 }
@@ -524,10 +620,12 @@ function adoptLegs(list) {
   });
 }
 function applyTravel(d) {
+  setHomeUrl(d);
   state.roster = (d.members || []).map(function (m) { return { memberId: m.memberId, name: m.name, ageGroup: m.ageGroup }; });
   state.expectedCount = Number(d.expectedCount) || 0;
   state.legs = adoptLegs(d.legs);
   state.removeLegIds = [];
+  state.dirty = false;     // freshly loaded legs are pristine
   ensureSectionSeed();     // guarantee one editable "everyone" card per empty section
   renderLegs();
 }
@@ -666,7 +764,7 @@ function sectionNode(dir, title, sub, cls, icon) {
   add.className = "ghost"; add.style.margin = "8px 0 4px";
   add.textContent = count > 1 ? "+ Add another separate " + dir.toLowerCase() + " journey"
                               : "+ Someone " + (dir === "Arrival" ? "arriving" : "leaving") + " separately?";
-  add.addEventListener("click", function () { state.legs.push(blankLeg(dir)); renderLegs(); });
+  add.addEventListener("click", function () { state.legs.push(blankLeg(dir)); markDirty(); renderLegs(); });
   sec.appendChild(add);
   return sec;
 }
@@ -681,13 +779,22 @@ function whoSelected(whoStr) {
 function legNode(l, i, dir, sectionCount, ordinal) {
   var named = namedRosterCount() > 0;
   var everyone = whoMeansEveryone(l.who);
-  // Chips appear once travel is split (2+ journeys) or an existing leg already names
-  // specific people. A lone whole-family journey stays collapsed (fix #3).
-  var showChips = named && (sectionCount > 1 || !everyone);
-  // Headcount-only families (no names) state the number on each journey — that's what
-  // drives the server's headcount coverage tier. Named families derive #People from chips.
-  var showPeople = !named;
-  var showEveryone = !showChips && everyone && (named || sectionCount === 1);
+  var famN = familySize();
+  // The single journey that covers everyone (no split yet). It stays collapsed: a
+  // "whole family" banner, and #People shown DISABLED + constant from the RSVP.
+  var isWhole = everyone && sectionCount === 1;
+  // Name checkboxes appear only once the family SPLITS (2+ journeys) or a leg already
+  // names specific people — so the guest can pick who is on each separate journey (pt 7).
+  var showChips = named && !isWhole;
+  var showEveryone = isWhole;
+  // #People field:
+  //   • whole-family journey -> DISABLED, constant = family size (from RSVP).
+  //   • headcount-only split  -> EDITABLE number (drives the server's headcount tier).
+  //   • named + chips         -> hidden (derived from the checked names).
+  var peopleFixed = isWhole && famN > 0;
+  // Headcount-only families keep an editable box whenever the count isn't pinned — this
+  // covers both splits AND a lone whole-family journey with no known RSVP size (no loss).
+  var peopleEdit  = !named && !peopleFixed;
 
   var div = document.createElement("div"); div.className = "leg";
   var dirBadge = dir === "Departure" ? '<span class="badge dep">Departure</span>'
@@ -697,23 +804,32 @@ function legNode(l, i, dir, sectionCount, ordinal) {
   var modeSel = '<select data-f="mode">' + optBlank("— how? —", l.mode) +
     MODES.map(function (m) { return opt(m, l.mode); }).join("") + '</select>';
 
+  // Chip checked-state: an "everyone" leg (who blank) defaults ALL names checked, so
+  // splitting off a separate journey keeps the rest of the family selected here rather
+  // than silently unchecking everyone.
   var whoSet = whoSelected(l.who);
   var whoChips = named ? state.roster.filter(function (m) { return String((m && m.name) || "").trim() !== ""; })
     .map(function (m) {
-      var on = whoSet[String(m.name || "").trim().toLowerCase()] ? " on" : "";
+      var on = (everyone || whoSet[String(m.name || "").trim().toLowerCase()]) ? " on" : "";
       var ck = on ? " checked" : "";
       return '<label class="who-opt' + on + '"><input type="checkbox" data-who="' + esc(m.name || "") + '"' + ck + '> ' + esc(m.name || "") + '</label>';
     }).join("") : "";
 
+  var peopleField = peopleFixed
+    ? '<div style="flex:0 0 42%;"><label># People</label>' +
+        '<input type="number" data-role="peoplefixed" value="' + famN + '" disabled title="From your RSVP"></div>'
+    : (peopleEdit ? '<div style="flex:0 0 38%;"><label># People</label>' +
+        '<input type="number" data-f="people" min="0" max="100" value="' + (l.people ? l.people : "") + '"></div>' : '');
+
   div.innerHTML =
     '<div class="lhead"><b>' + esc(heading) + '</b>' + dirBadge + '</div>' +
     '<div class="leghint" data-role="leghint"></div>' +
-    (showEveryone ? '<div class="everyone"><span class="who-ic">👪</span> This journey is for your <b>&nbsp;whole family</b>.</div>' : '') +
+    (showEveryone ? '<div class="everyone"><span class="who-ic">👪</span> This journey is for your <b>&nbsp;whole family</b>' +
+        (famN > 0 ? ' <span style="opacity:.8">(' + famN + ')</span>' : '') + '.</div>' : '') +
     (showChips ? '<label>Who is on this journey?</label><div class="who-grid" data-role="whogrid">' + whoChips + '</div>' : '') +
     '<div class="row">' +
       '<div><label>Travel mode</label>' + modeSel + '</div>' +
-      (showPeople ? '<div style="flex:0 0 38%;"><label># People</label>' +
-        '<input type="number" data-f="people" min="0" max="100" value="' + (l.people ? l.people : "") + '"></div>' : '') +
+      peopleField +
     '</div>' +
     '<div class="row">' +
       '<div><label>Flight / train / bus no.</label>' +
@@ -736,6 +852,7 @@ function legNode(l, i, dir, sectionCount, ordinal) {
     var ev = (elx.tagName === "SELECT") ? "change" : "input";
     elx.addEventListener(ev, function (e) {
       state.legs[i][f] = e.target.value;
+      markDirty();
       updateLegHint(div, state.legs[i]);
       refreshLiveStatus();
     });
@@ -743,8 +860,12 @@ function legNode(l, i, dir, sectionCount, ordinal) {
   var peopleEl = div.querySelector('[data-f=people]');
   if (peopleEl) peopleEl.addEventListener("input", function (e) {
     state.legs[i].people = Number(e.target.value) || 0;
+    markDirty();
     updateLegHint(div, state.legs[i]); refreshLiveStatus();
   });
+  // Whole-family journey: the #People field is disabled (fixed from the RSVP), so it fires
+  // no events. Pin the headcount into state so the leg is "filled" and serializes correctly.
+  if (peopleFixed) state.legs[i].people = famN;
 
   // roster chips: toggle a name in/out of "who" + keep #People in sync
   var grid = div.querySelector('[data-role=whogrid]');
@@ -758,6 +879,7 @@ function legNode(l, i, dir, sectionCount, ordinal) {
         });
         state.legs[i].who = names.join(", ");
         state.legs[i].people = names.length;
+        markDirty();
         updateLegHint(div, state.legs[i]); refreshLiveStatus();
       });
     });
@@ -769,6 +891,7 @@ function legNode(l, i, dir, sectionCount, ordinal) {
     if (!confirm("Remove this journey? This can't be undone once you Save.")) return;
     if (l2.legId && String(l2.legId).trim() !== "") state.removeLegIds.push(l2.legId);
     state.legs.splice(i, 1);
+    markDirty();
     renderLegs();
   });
   updateLegHint(div, l);
@@ -838,6 +961,7 @@ $("saveBtn").addEventListener("click", function () {
         html += "<br>Still to do: add your <b>" + esc(sm.owed.join(" and ").toLowerCase()) + "</b> (with dates &amp; times).";
       }
       $("doneMsg").innerHTML = html;
+      state.dirty = false;             // saved — nothing left to protect
       hide("form"); reveal("done");
     })
     .catch(function () { $("saveBtn").disabled = false; msg(fm, "Network error — please retry.", "err"); });

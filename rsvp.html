@@ -88,15 +88,21 @@
   header{ text-align:center; padding:44px 12px 8px; color:var(--cream); position:relative; }
   .arch{ position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:0;
          width:min(520px,86vw); opacity:.4; pointer-events:none; color:var(--gold2); }
-  .monogram{
-    position:relative; z-index:1;
-    width:80px; height:80px; margin:0 auto 14px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center; font-size:32px;
-    background:radial-gradient(circle at 35% 30%, #fff4d8, var(--gold) 72%);
-    color:var(--plum); box-shadow:0 10px 30px -8px rgba(216,179,85,.7), inset 0 0 0 2px rgba(255,255,255,.4);
-    animation:pop .9s cubic-bezier(.22,1,.36,1) both;
-  }
+  /* Royal emblem medallion — shared with home.html for a cohesive invitation set:
+     a gold coin with the auspicious ॐ, filigree rim and lotus flourish. */
+  .emblem{ position:relative; z-index:1; width:96px; height:96px; margin:0 auto 12px; border-radius:50%;
+           animation:emblemIn 1.1s cubic-bezier(.22,1,.36,1) both, glow 5s ease-in-out 1.1s infinite;
+           filter:drop-shadow(0 8px 20px rgba(0,0,0,.4)); }
+  .emblem svg{ width:100%; height:100%; display:block; border-radius:50%; }
+  @keyframes emblemIn{ 0%{ transform:scale(.4) rotate(-12deg); opacity:0; } 100%{ transform:none; opacity:1; } }
+  @keyframes glow{ 0%,100%{ filter:drop-shadow(0 8px 20px rgba(0,0,0,.4)); }
+                   50%{ filter:drop-shadow(0 8px 26px rgba(216,179,85,.6)); } }
   @keyframes pop{ 0%{ transform:scale(.4); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
+
+  /* reveal-on-scroll — gentle entrance for headings/intro as they appear */
+  .reveal{ opacity:0; transform:translateY(22px); transition:opacity .8s ease, transform .8s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in{ opacity:1; transform:none; }
+  .reveal.d1{ transition-delay:.08s; } .reveal.d2{ transition-delay:.16s; }
   .hero-deva{ font-family:var(--deva); color:var(--gold-soft); font-size:15px; letter-spacing:.06em;
               opacity:.9; margin:0 0 2px; animation:rise .8s ease .02s both; }
   .eyebrow{ font-family:var(--sans); letter-spacing:.42em; text-transform:uppercase;
@@ -227,8 +233,21 @@
   .spin p{ font-family:var(--serif); font-style:italic; font-size:18px; letter-spacing:.04em; }
 
   .center{ text-align:center; }
-  .invite-body{ margin-top:8px; }
-  .invite-body a.primary{ display:inline-block; text-decoration:none; width:auto; padding:13px 26px; }
+
+  /* "Back to invitation" nav — present on every view; carries the family through
+     so the guest lands back on THEIR home page. Hidden until the server hands us
+     a homeUrl (blank when HOME_PAGE_URL isn't configured). */
+  .topnav{ position:relative; z-index:2; max-width:660px; margin:0 auto; padding:14px 18px 0;
+           display:none; }
+  .topnav.show{ display:block; }
+  .navhome{ display:inline-flex; align-items:center; gap:8px; font-family:var(--sans);
+            font-size:13px; font-weight:500; letter-spacing:.04em; color:var(--gold-soft);
+            text-decoration:none; padding:8px 15px 8px 12px; border-radius:30px;
+            background:rgba(255,255,255,.06); border:1px solid rgba(216,179,85,.35);
+            transition:background .25s, border-color .25s, color .25s, transform .15s; cursor:pointer; }
+  .navhome:hover{ background:rgba(216,179,85,.16); border-color:var(--gold2); color:#fff; }
+  .navhome:active{ transform:translateY(1px); }
+  .navhome .chev{ font-size:16px; line-height:1; }
 
   /* thank-you flourish ------------------------------------------------- */
   #done .seal{ font-size:46px; animation:pop .8s cubic-bezier(.22,1,.36,1) both; }
@@ -238,11 +257,19 @@
     *{ animation-duration:.001s !important; animation-iteration-count:1 !important; }
     .petals{ display:none; }
     html{ scroll-behavior:auto; }
+    /* never leave a reveal element stuck invisible when motion is off */
+    .reveal{ opacity:1 !important; transform:none !important; transition:none !important; }
   }
 </style>
 </head>
 <body>
 <div class="petals" id="petals" aria-hidden="true"></div>
+
+<nav id="topnav" class="topnav">
+  <a id="navHome" class="navhome" href="#" role="button">
+    <span class="chev" aria-hidden="true">‹</span> Back to invitation
+  </a>
+</nav>
 
 <div class="wrap">
   <header>
@@ -250,7 +277,31 @@
       <path d="M20 300 V110 Q20 30 120 24 Q260 12 260 12 Q260 12 400 24 Q500 30 500 110 V300"/>
       <path d="M40 300 V116 Q40 46 130 40 Q260 30 260 30 Q260 30 390 40 Q480 46 480 116 V300" opacity=".55"/>
     </svg>
-    <div class="monogram">💍</div>
+    <div class="emblem" aria-hidden="true">
+      <!-- Gold medallion with the auspicious ॐ — shared with the home invitation page. -->
+      <svg viewBox="0 0 120 120" role="img" aria-label="Auspicious emblem">
+        <defs>
+          <radialGradient id="coin" cx="38%" cy="32%" r="75%">
+            <stop offset="0%" stop-color="#fce7b0"/><stop offset="42%" stop-color="#d8b355"/><stop offset="100%" stop-color="#a67c1f"/>
+          </radialGradient>
+          <linearGradient id="ring" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f4dd93"/><stop offset="100%" stop-color="#9a6f1b"/>
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r="58" fill="url(#ring)"/>
+        <circle cx="60" cy="60" r="52" fill="url(#coin)"/>
+        <circle cx="60" cy="60" r="52" fill="none" stroke="#8a6216" stroke-width="1" opacity=".5"/>
+        <g fill="#8a6216" opacity=".55">
+          <circle cx="60" cy="12" r="1.7"/><circle cx="84" cy="18.5" r="1.7"/><circle cx="101.5" cy="36" r="1.7"/>
+          <circle cx="108" cy="60" r="1.7"/><circle cx="101.5" cy="84" r="1.7"/><circle cx="84" cy="101.5" r="1.7"/>
+          <circle cx="60" cy="108" r="1.7"/><circle cx="36" cy="101.5" r="1.7"/><circle cx="18.5" cy="84" r="1.7"/>
+          <circle cx="12" cy="60" r="1.7"/><circle cx="18.5" cy="36" r="1.7"/><circle cx="36" cy="18.5" r="1.7"/>
+        </g>
+        <path d="M60 26 Q56 32 60 36 Q64 32 60 26 M52 28 Q52 34 58 36 M68 28 Q68 34 62 36"
+              fill="none" stroke="#7a5713" stroke-width="1.4" stroke-linecap="round" opacity=".7"/>
+        <text x="60" y="82" text-anchor="middle" font-family="'Tiro Devanagari Hindi', serif" font-size="52" fill="#5a3f0e">ॐ</text>
+      </svg>
+    </div>
     <p class="hero-deva">शुभ विवाह</p>
     <p class="eyebrow" id="eyebrow">Together with their families</p>
     <h1>You're <em>Invited</em></h1>
@@ -270,17 +321,10 @@
     <p class="hint">Please use the exact link from your invitation message, or contact the host.</p>
   </div>
 
-  <!-- Invitation (shown once state loads, if the host set an INVITE_URL) -->
-  <div id="invite" class="card hidden center">
-    <h2>💌 With joyful hearts</h2>
-    <p class="sub">We would be honoured by your presence.</p>
-    <div id="inviteBody" class="invite-body"></div>
-  </div>
-
   <!-- Step 1: affirmation + secret gate -->
   <div id="gate" class="card hidden">
-    <h2>Is this your family?</h2>
-    <p id="affirm" class="sub"></p>
+    <h2 class="reveal">Is this your family?</h2>
+    <p id="affirm" class="sub reveal d1"></p>
     <label for="secret">Family access code</label>
     <input id="secret" type="text" autocomplete="off" autocapitalize="characters"
            placeholder="e.g. SHARMA_78888" />
@@ -292,8 +336,8 @@
 
   <!-- Step 2: edit members + RSVP + IDs -->
   <div id="form" class="card hidden">
-    <h2 id="formTitle">Your family</h2>
-    <p class="hint" style="margin-bottom:4px;">We already have the people below. Please correct anything, add anyone missing,
+    <h2 id="formTitle" class="reveal">Your family</h2>
+    <p class="hint reveal d1" style="margin-bottom:4px;">We already have the people below. Please correct anything, add anyone missing,
        and upload an ID proof (Aadhaar / passport / driving licence) for each guest.</p>
 
     <label for="rsvp">Will your family attend?</label>
@@ -322,9 +366,9 @@
 
   <!-- Step 3: done -->
   <div id="done" class="card hidden center">
-    <div class="seal">🎊</div>
-    <h2>Thank you!</h2>
-    <p id="doneMsg" class="sub"></p>
+    <div class="seal reveal">🎊</div>
+    <h2 class="reveal d1">Thank you!</h2>
+    <p id="doneMsg" class="sub reveal d2"></p>
     <button id="againBtn" class="link">Make another change</button>
   </div>
 
@@ -345,6 +389,35 @@ var state = { members: [], removeIds: [], invitedDays: [], attendingDays: [] }; 
 
 function show(id) { $(id).classList.remove("hidden"); }
 function hide(id) { $(id).classList.add("hidden"); }
+
+/* ---- "Back to invitation" nav (point 5) --------------------------------
+   The home page is public, so the server hands us a family-scoped homeUrl even
+   pre-secret. Reveal the nav once we have it. If the guest is mid-edit (the form
+   is open and they've touched something since the last save), confirm before we
+   navigate away so an accidental tap can't drop unsaved changes. ---------- */
+function setHomeUrl(d) {
+  if (d && d.homeUrl && !state.homeUrl) {
+    state.homeUrl = String(d.homeUrl);
+    $("topnav").classList.add("show");
+  }
+}
+function isEditing() {
+  // "Editing" = the form is on screen (not the done/thank-you view) AND the guest
+  // has made an unsaved change. A pristine, just-loaded form doesn't warn.
+  return !$("form").classList.contains("hidden") && state.dirty === true;
+}
+$("navHome").addEventListener("click", function (e) {
+  e.preventDefault();
+  if (!state.homeUrl) return;
+  if (isEditing() &&
+      !confirm("Leave this page and go back to the invitation? Your unsaved RSVP changes will be lost.")) return;
+  state.dirty = false;                 // we're leaving on purpose — silence beforeunload
+  location.href = state.homeUrl;
+});
+// Native guard for browser back / tab close while mid-edit.
+window.addEventListener("beforeunload", function (e) {
+  if (isEditing()) { e.preventDefault(); e.returnValue = ""; return ""; }
+});
 function fatal(m) { hide("loading"); $("fatalMsg").textContent = m; show("fatal"); }
 function msg(el, text, kind) { el.textContent = text; el.className = "msg show " + kind; }
 function clearMsg(el) { el.className = "msg"; }
@@ -374,7 +447,24 @@ function clearMsg(el) { el.className = "msg"; }
 function reveal(id) {
   show(id);
   var el = $(id);
+  armReveals(el);
   try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {}
+}
+
+/* ---- reveal-on-appear: gently fade/rise .reveal elements. Called when a card is
+        shown (its .reveal children animate in). Elements already 'in' are skipped.
+        Without IntersectionObserver support, everything is shown immediately. ---- */
+function armReveals(scope) {
+  var root = scope || document;
+  var els = root.querySelectorAll ? root.querySelectorAll(".reveal:not(.in)") : [];
+  if (!("IntersectionObserver" in window)) {
+    Array.prototype.forEach.call(els, function (e) { e.classList.add("in"); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+  }, { threshold: .12, rootMargin: "0px 0px -6% 0px" });
+  Array.prototype.forEach.call(els, function (e) { io.observe(e); });
 }
 
 /* ---- personalise the header from the family's own invite: their surname in
@@ -418,49 +508,16 @@ if (!familyKey) {
         ? "We couldn't find your family for this link." : "Something went wrong loading your details."); return; }
       state.surname = d.surname; state.headName = d.headName;
       state.events = d.events || "";
+      setHomeUrl(d);
       personalizeHeader(d.surname, d.events);
       $("affirm").innerHTML = "You are the <b>" + esc(d.surname || "—") + "</b> family" +
         (d.headName ? ", head: <b>" + esc(d.headName) + "</b>" : "") + "?";
       $("formTitle").textContent = (d.surname ? d.surname + " family" : "Your family");
-      renderResources(d.resources);
-      show("gate");
+      // (Invite resources — photos / video / venue map — now live on the HOME page,
+      // which every family lands on first. The RSVP page stays focused on RSVP + IDs.)
+      show("gate"); armReveals($("gate"));
     })
     .catch(function () { fatal("Network error — please check your connection and retry."); });
-}
-
-/* ---- invitation card: render the family's resource set (each item is embedded
-        as a player/image or shown as a tidy titled link). The list is chosen by
-        the server for THIS family's event group (both-days vs 31st-only). ---- */
-function renderResources(list) {
-  list = list || [];
-  if (!list.length) return;                // no resources for this group — hide card
-  var body = $("inviteBody"), html = "";
-  list.forEach(function (r) {
-    var url = (r && r.url ? String(r.url) : "").trim();
-    if (!url) return;
-    var name = (r && r.name ? String(r.name) : "").trim();
-    var yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([\w-]{11})/);
-    var driveFile = url.match(/drive\.google\.com\/file\/d\/([\w-]+)/);
-    var inner;
-    if (yt) {
-      inner = '<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;box-shadow:0 12px 30px -14px rgba(15,42,74,.55);">' +
-        '<iframe src="https://www.youtube.com/embed/' + yt[1] + '" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;"' +
-        ' allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></div>';
-    } else if (driveFile) {
-      inner = '<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:12px;box-shadow:0 12px 30px -14px rgba(15,42,74,.55);">' +
-        '<iframe src="https://drive.google.com/file/d/' + driveFile[1] + '/preview" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allowfullscreen></iframe></div>';
-    } else if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)) {
-      inner = '<img src="' + esc(url) + '" alt="' + esc(name || "Wedding invitation") + '" style="max-width:100%;border-radius:12px;box-shadow:0 12px 30px -14px rgba(15,42,74,.55);">';
-    } else {
-      inner = '<a class="primary" style="text-decoration:none;" href="' +
-        esc(url) + '" target="_blank" rel="noopener">' + esc(name || "Open →") + '</a>';
-    }
-    html += '<div style="margin:16px 0;">' +
-      (name ? '<div style="font-family:var(--serif);font-style:italic;font-size:18px;color:var(--wine);margin-bottom:8px;">' + esc(name) + '</div>' : '') +
-      inner + '</div>';
-  });
-  body.innerHTML = html;
-  show("invite");
 }
 
 /* ---- step 1 -> 2: verify the code by doing an authenticated LOAD. The server
@@ -473,10 +530,16 @@ function applyRoster(d) {
     return { memberId: m.memberId, name: m.name, ageGroup: m.ageGroup || "Adult",
              isHead: m.isHead === true, idReceived: m.idReceived === true }; });
   state.removeIds = [];                    // fresh roster -> no pending deletes
+  state.dirty = false;                     // freshly loaded roster is pristine
+  setHomeUrl(d);
   if (d.rsvp) $("rsvp").value = d.rsvp;
   renderDays(d.invitedDays || [], d.attendingDays || []);
   renderMembers();
 }
+
+/* Mark the form dirty on any guest edit, so the nav / beforeunload guard knows
+   there are unsaved changes to protect. */
+function markDirty() { state.dirty = true; }
 
 $("gateBtn").addEventListener("click", function () {
   var s = $("secret").value.trim();
@@ -551,6 +614,7 @@ function renderDays(invited, chosen) {
       var i = state.attendingDays.indexOf(v);
       if (e.target.checked) { if (i === -1) state.attendingDays.push(v); }
       else if (i !== -1) state.attendingDays.splice(i, 1);
+      markDirty();
     });
     box.appendChild(lbl);
   });
@@ -583,8 +647,8 @@ function memberNode(m, i) {
     '<div class="filechip" data-role="chip"></div>' +
     '<div style="text-align:right;"><button class="link" data-role="remove" style="color:#a83a63;margin-top:4px;">✕ Remove this guest</button></div>';
   // wire inputs back into state
-  div.querySelector('[data-f=name]').addEventListener("input", function (e) { state.members[i].name = e.target.value; });
-  div.querySelector('[data-f=ageGroup]').addEventListener("change", function (e) { state.members[i].ageGroup = e.target.value; });
+  div.querySelector('[data-f=name]').addEventListener("input", function (e) { state.members[i].name = e.target.value; markDirty(); });
+  div.querySelector('[data-f=ageGroup]').addEventListener("change", function (e) { state.members[i].ageGroup = e.target.value; markDirty(); });
   div.querySelector('[data-role=remove]').addEventListener("click", function () {
     var m2 = state.members[i];
     var who = (m2.name || "").trim() || ("Guest " + (i + 1));
@@ -592,6 +656,7 @@ function memberNode(m, i) {
     // a saved member (has a memberId) must be explicitly removed on the server
     if (m2.memberId && String(m2.memberId).trim() !== "") state.removeIds.push(m2.memberId);
     state.members.splice(i, 1);
+    markDirty();
     renderMembers();
   });
   var chip = div.querySelector('[data-role=chip]');
@@ -601,6 +666,7 @@ function memberNode(m, i) {
     if (ALLOWED.indexOf(f.type) === -1) { chip.textContent = "⚠ Unsupported file type."; e.target.value = ""; return; }
     if (f.size > MAX_FILE_BYTES) { chip.textContent = "⚠ File too large (max 6 MB)."; e.target.value = ""; return; }
     state.members[i]._file = f; chip.textContent = "✓ " + f.name + " ready to upload.";
+    markDirty();
   });
   return div;
 }
@@ -608,8 +674,12 @@ function opt(v, cur) { return '<option value="' + v + '"' + (v === cur ? " selec
 
 $("addBtn").addEventListener("click", function () {
   addMember();
+  markDirty();
   renderMembers();
 });
+
+/* the RSVP dropdown is an edit too */
+$("rsvp").addEventListener("change", markDirty);
 
 /* ---- step 2 -> save: build payload (base64 files) and POST ---- */
 $("saveBtn").addEventListener("click", function () {
@@ -659,6 +729,7 @@ $("saveBtn").addEventListener("click", function () {
     html += miss.length ? "<br>Still needs an ID proof: <b>" + esc(miss.join(", ")) + "</b>."
                         : "<br>All ID proofs received ✓";
     $("doneMsg").innerHTML = html;
+    state.dirty = false;              // saved — nothing left to protect
     hide("form"); reveal("done");
   })
   .catch(function () { $("saveBtn").disabled = false; msg(fm, "Network error — please retry.", "err"); });
