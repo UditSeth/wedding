@@ -4,100 +4,98 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="robots" content="noindex, nofollow" />
-<meta name="theme-color" content="#3a1338" />
+<meta name="theme-color" content="#0f2a4a" />
 <title>Wedding Travel Plans — 30th &amp; 31st August</title>
 <!--
-  TRAVEL page for the wedding Command Centre.  ✦ Fancy edition ✦
-  Sister to rsvp.html — SAME two-factor auth, SAME fetch pattern, SAME backend
-  (WebApp.gs). It only differs in what it collects: each family's arrival and
-  departure journeys, which drive pickups AND room allocation.
+  TRAVEL page for the wedding Command Centre.  ✦ Royal edition ✦
+  Sister to home.html / rsvp.html — SAME two-factor auth, SAME fetch pattern,
+  SAME backend (WebApp.gs), SAME royal navy/gold theme. It only differs in what it
+  collects: each family's ARRIVAL and DEPARTURE journeys, which drive room
+  allocation (pickups are currently suspended — see WebApp.gs cloneLeg_).
 
   ONE thing to configure: set API_URL below to your deployed Apps Script Web App
-  URL (…/exec) — the SAME deployment as the RSVP page. No build step, no deps.
+  URL (…/exec) — the SAME deployment as the other pages. No build step, no deps.
   Host this single file and share links of the form:
        https://your-travel-page/?family=<uuid>
-  The <uuid> is the same one printed into Families → Invite Link, and the host
-  configures Config → TRAVEL_PAGE_URL so travel-reminder links point here.
 
-  DESIGN (matches the agreed decisions):
-   • No Google login for guests; same shared secret (SURNAME + last-5 of head
-     phone), same pre-secret affirmation, same additive/merge backend.
-   • ONE card per journey ("leg"). A family whose members travel together files
-     one leg; members arriving separately file a leg each. "Who" is picked from
-     the (read-only) roster so nobody retypes names.
-   • Native date + time pickers (input type=date / type=time) → the backend gets
-     "yyyy-mm-dd" and "HH:MM" verbatim (stored as text, never date-coerced).
-   • Legs round-trip by Leg ID: re-opening the page edits the RIGHT leg instead
-     of duplicating, and the host's Vehicle / Batch / Status columns are never
-     touched by a guest save.
+  UX MODEL (rebuilt from the four review points):
+   • NO "direction" dropdown. Two fixed sections — "When you arrive" and "When you
+     leave". A card's direction is implied by its section (never editable), so the
+     backend still receives direction:"Arrival"/"Departure" per leg.
+   • WHO defaults to the WHOLE family. A section normally holds ONE journey that
+     covers everyone (no per-person picking). Separate travel is rare, so it's
+     OPT-IN: "+ Someone travelling separately?" adds another journey to that
+     section and reveals the per-person chips so the family can split.
+   • The live status pill AND the save confirmation are driven by the SERVER's
+     tiered `summary.complete` (roster coverage → headcount → leg-level), mirrored
+     client-side with `expectedCount`, so partial info NEVER shows a false ✓.
+   • Legs round-trip by Leg ID: re-opening edits the RIGHT leg (no duplicates), and
+     the host's Vehicle / Batch / Status columns are never touched by a guest save.
    • We NEVER receive or display the secret / head phone from the server.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Jost:wght@300;400;500;600&family=Tiro+Devanagari+Hindi&display=swap" rel="stylesheet">
 <style>
   :root{
-    --plum:#3a1338;         /* deep aubergine */
-    --plum2:#6d2461;        /* mid plum       */
-    --wine:#8e2b52;         /* rose-wine      */
-    --gold:#c9a34e;         /* champagne gold */
-    --gold-soft:#e7d3a1;
-    --cream:#fbf6ef;        /* warm paper     */
-    --cream2:#f3e9dc;
-    --ink:#3d2b3a;          /* text on cream  */
-    --ink-soft:#7a6472;
-    --ok:#2f7d4f;
-    --warn:#b23a48;
-    --line:rgba(201,163,78,.35);
-    --shadow:0 22px 60px -30px rgba(58,19,56,.55);
+    --navy:#0f2a4a; --navy2:#14365e;
+    --ink:#233a54; --ink-soft:#5f708a;
+    --gold:#b8912f; --gold2:#d8b355; --gold-soft:#eadfbf;
+    --cream:#fbf5e9; --cream2:#f4e9d3;
+    --wine:#8e2b52; --teal:#1f7a6d;
+    --ok:#1f7a6d; --warn:#a83a63;
+    --line:rgba(184,145,47,.38);
+    --shadow:0 26px 70px -34px rgba(15,42,74,.55);
     --serif:"Cormorant Garamond",Georgia,serif;
     --display:"Playfair Display",Georgia,serif;
+    --deva:"Tiro Devanagari Hindi","Cormorant Garamond",serif;
     --sans:"Jost",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
   }
   *{ box-sizing:border-box; }
   html{ scroll-behavior:smooth; }
   body{
-    margin:0; color:var(--ink); font-family:var(--sans); line-height:1.6;
+    margin:0; color:var(--cream); font-family:var(--sans); line-height:1.6;
     -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
     background:
-      radial-gradient(1200px 700px at 12% -8%, rgba(141,43,82,.28), transparent 60%),
-      radial-gradient(1000px 620px at 108% 6%, rgba(109,36,97,.30), transparent 58%),
-      radial-gradient(900px 900px at 50% 120%, rgba(201,163,78,.16), transparent 60%),
-      linear-gradient(160deg,#2c0e2b 0%, #4a1642 42%, #3a1338 100%);
-    background-attachment:fixed;
-    min-height:100vh; overflow-x:hidden;
+      radial-gradient(120% 80% at 50% -10%, rgba(216,179,85,.14), transparent 55%),
+      linear-gradient(165deg,#0c2340 0%, #12315a 46%, #0f2a4a 100%);
+    background-attachment:fixed; min-height:100vh; overflow-x:hidden;
   }
 
-  /* floating petals ---------------------------------------------------- */
+  /* floating gold particles -------------------------------------------- */
   .petals{ position:fixed; inset:0; pointer-events:none; z-index:0; overflow:hidden; }
-  .petal{ position:absolute; top:-8vh; font-size:18px; opacity:0; color:var(--gold-soft);
-          animation:fall linear infinite; filter:drop-shadow(0 2px 2px rgba(0,0,0,.15)); }
+  .petal{ position:absolute; top:-8vh; font-size:16px; opacity:0; color:var(--gold2);
+          animation:fall linear infinite; filter:drop-shadow(0 1px 2px rgba(0,0,0,.25)); }
   @keyframes fall{
     0%{ transform:translateY(-10vh) rotate(0deg); opacity:0; }
-    10%{ opacity:.7; }
-    90%{ opacity:.6; }
+    12%{ opacity:.5; } 88%{ opacity:.4; }
     100%{ transform:translateY(112vh) rotate(320deg); opacity:0; }
   }
 
-  .wrap{ position:relative; z-index:1; max-width:660px; margin:0 auto; padding:22px 18px 64px; }
+  .wrap{ position:relative; z-index:1; max-width:680px; margin:0 auto; padding:22px 18px 64px; }
 
   /* header ------------------------------------------------------------- */
-  header{ text-align:center; padding:40px 12px 10px; color:var(--cream); }
+  header{ text-align:center; padding:44px 12px 8px; color:var(--cream); position:relative; }
+  .arch{ position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:0;
+         width:min(520px,86vw); opacity:.4; pointer-events:none; color:var(--gold2); }
   .monogram{
-    width:78px; height:78px; margin:0 auto 14px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center; font-size:30px;
-    background:radial-gradient(circle at 35% 30%, #fff4d8, var(--gold) 70%);
-    color:var(--plum); box-shadow:0 10px 30px -8px rgba(201,163,78,.7), inset 0 0 0 2px rgba(255,255,255,.4);
+    position:relative; z-index:1;
+    width:80px; height:80px; margin:0 auto 14px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:32px;
+    background:radial-gradient(circle at 35% 30%, #fff4d8, var(--gold) 72%);
+    color:var(--navy); box-shadow:0 10px 30px -8px rgba(216,179,85,.7), inset 0 0 0 2px rgba(255,255,255,.4);
     animation:pop .9s cubic-bezier(.22,1,.36,1) both;
   }
   @keyframes pop{ 0%{ transform:scale(.4); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
-  .eyebrow{ font-family:var(--sans); letter-spacing:.42em; text-transform:uppercase;
-            font-size:11px; font-weight:500; color:var(--gold-soft); margin:0 0 6px; padding-left:.42em;
+  .hero-deva{ font-family:var(--deva); color:var(--gold-soft); font-size:15px; letter-spacing:.06em;
+              opacity:.9; margin:0 0 2px; animation:rise .8s ease .02s both; }
+  .eyebrow{ font-family:var(--sans); letter-spacing:.4em; text-transform:uppercase;
+            font-size:11px; font-weight:500; color:var(--gold-soft); margin:0 0 6px; padding-left:.4em;
             animation:rise .8s ease .05s both; }
-  header h1{ font-family:var(--display); font-weight:600; font-size:clamp(34px,8vw,52px);
+  header h1{ font-family:var(--display); font-weight:700; font-size:clamp(34px,8vw,52px);
              margin:2px 0 6px; color:#fff; letter-spacing:.5px; line-height:1.05;
              animation:rise .9s ease .12s both; }
-  header h1 em{ font-style:italic; color:var(--gold-soft); }
+  header h1 em{ font-style:italic; color:var(--gold2); }
   .dates{ font-family:var(--serif); font-size:clamp(17px,4.5vw,22px); color:var(--cream);
           animation:rise .9s ease .2s both; }
   .rule{ display:flex; align-items:center; justify-content:center; gap:14px; margin:16px auto 4px; max-width:260px;
@@ -108,50 +106,66 @@
 
   /* cards -------------------------------------------------------------- */
   .card{
-    position:relative; background:linear-gradient(180deg,#fffdf9,var(--cream));
+    position:relative; color:var(--ink);
+    background:linear-gradient(180deg,#fffaf0,var(--cream));
     border-radius:20px; padding:30px 26px; margin:22px 0; box-shadow:var(--shadow);
     border:1px solid rgba(255,255,255,.6);
   }
-  .card::before{
-    content:""; position:absolute; inset:9px; border:1px solid var(--line);
-    border-radius:13px; pointer-events:none;
-  }
+  .card::before{ content:""; position:absolute; inset:9px; border:1px solid var(--line);
+                 border-radius:13px; pointer-events:none; }
   .card.hidden{ display:none; }
   .card:not(.hidden){ animation:cardIn .7s cubic-bezier(.22,1,.36,1) both; }
   @keyframes cardIn{ 0%{ opacity:0; transform:translateY(26px) scale(.985); } 100%{ opacity:1; transform:none; } }
   @keyframes rise{ 0%{ opacity:0; transform:translateY(16px); } 100%{ opacity:1; transform:none; } }
 
-  h2{ font-family:var(--display); font-weight:600; font-size:26px; color:var(--plum2);
+  h2{ font-family:var(--display); font-weight:600; font-size:26px; color:var(--navy);
       margin:0 0 6px; text-align:center; }
   .card > p{ text-align:center; }
   .sub{ font-family:var(--serif); font-size:18px; color:var(--ink-soft); margin:0 0 8px; text-align:center; }
 
   label{ display:block; font-size:12px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
-         color:var(--plum2); margin:18px 0 7px; }
+         color:var(--navy2); margin:16px 0 7px; }
   input[type=text], input[type=tel], input[type=date], input[type=time], input[type=number], select, textarea{
     width:100%; padding:14px 15px; font-size:16px; font-family:var(--sans); color:var(--ink);
     border:1px solid var(--line); border-radius:12px; background:#fffdfa;
     transition:border-color .25s, box-shadow .25s, background .25s; outline:none;
   }
-  textarea{ min-height:64px; resize:vertical; line-height:1.5; }
+  textarea{ min-height:60px; resize:vertical; line-height:1.5; }
   input:focus, select:focus, textarea:focus{
-    border-color:var(--gold); box-shadow:0 0 0 4px rgba(201,163,78,.18); background:#fff;
+    border-color:var(--gold); box-shadow:0 0 0 4px rgba(184,145,47,.18); background:#fff;
   }
   select{ appearance:none; -webkit-appearance:none;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236d2461' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%230f2a4a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
     background-repeat:no-repeat; background-position:right 16px center; padding-right:40px; }
 
-  /* leg cards ---------------------------------------------------------- */
+  /* section (Arrival / Departure) ------------------------------------- */
+  .sec{ margin:22px 0 4px; }
+  .sec-head{ display:flex; align-items:center; gap:12px; margin:6px 0 2px; }
+  .sec-ic{ width:44px; height:44px; border-radius:50%; flex:0 0 auto; display:flex;
+           align-items:center; justify-content:center; font-size:22px; color:#fff;
+           box-shadow:0 8px 20px -8px rgba(15,42,74,.5); }
+  .sec-arr .sec-ic{ background:linear-gradient(135deg,#2b8f7f,#166357); }
+  .sec-dep .sec-ic{ background:linear-gradient(135deg,#d8b355,#b8912f); }
+  .sec-title{ font-family:var(--display); font-weight:600; font-size:21px; color:var(--navy); line-height:1.1; }
+  .sec-title small{ display:block; font-family:var(--serif); font-style:italic; font-weight:400;
+                    font-size:14px; color:var(--ink-soft); letter-spacing:0; text-transform:none; }
+
   .leg{
-    border:1px solid var(--line); border-radius:16px; padding:18px 18px 8px; margin:16px 0;
-    background:linear-gradient(180deg,#fffdf9,#fbf4e8);
-    animation:cardIn .5s cubic-bezier(.22,1,.36,1) both;
+    border:1px solid var(--line); border-radius:16px; padding:16px 18px 8px; margin:12px 0;
+    background:linear-gradient(180deg,#fffdf9,#fbf4e6);
+    animation:cardIn .45s cubic-bezier(.22,1,.36,1) both;
   }
-  .leg .head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:4px; }
-  .leg .head b{ font-family:var(--serif); font-size:19px; font-weight:600; color:var(--plum); }
+  .leg .lhead{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:2px; }
+  .leg .lhead b{ font-family:var(--serif); font-size:17px; font-weight:600; color:var(--navy); }
   .leg .row{ display:flex; gap:12px; }
   .leg .row > *{ flex:1; }
   @media (max-width:460px){ .leg .row{ flex-direction:column; gap:0; } }
+
+  /* "whole family" default banner ------------------------------------- */
+  .everyone{ display:flex; align-items:center; gap:9px; font-family:var(--serif); font-size:16px;
+             color:var(--teal); background:rgba(31,122,109,.09); border:1px solid rgba(31,122,109,.28);
+             border-radius:12px; padding:9px 13px; margin:6px 0 2px; }
+  .everyone .who-ic{ font-size:18px; }
 
   .who-grid{ display:flex; flex-wrap:wrap; gap:8px; margin:2px 0 4px; }
   .who-opt{ display:inline-flex; align-items:center; gap:8px; font-family:var(--serif); font-size:16px;
@@ -159,20 +173,19 @@
             cursor:pointer; background:#fffdfa; transition:.2s; }
   .who-opt:hover{ border-color:var(--gold); background:#fff; }
   .who-opt input{ width:17px; height:17px; accent-color:var(--wine); flex:0 0 auto; }
-  .who-opt.on{ background:rgba(201,163,78,.14); border-color:var(--gold); }
+  .who-opt.on{ background:rgba(184,145,47,.16); border-color:var(--gold); }
 
   .badge{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600;
           letter-spacing:.06em; padding:5px 11px; border-radius:30px; white-space:nowrap; }
-  .badge.arr{ background:rgba(47,125,79,.12); color:var(--ok); border:1px solid rgba(47,125,79,.3); }
-  .badge.dep{ background:rgba(201,163,78,.18); color:#8a6d20; border:1px solid rgba(201,163,78,.5); }
+  .badge.arr{ background:rgba(31,122,109,.12); color:var(--teal); border:1px solid rgba(31,122,109,.3); }
+  .badge.dep{ background:rgba(184,145,47,.18); color:#8a6d20; border:1px solid rgba(184,145,47,.5); }
 
-  /* status pill (top of form) ----------------------------------------- */
-  .status{ text-align:center; font-family:var(--serif); font-size:16px; margin:2px 0 10px; padding:10px 14px;
+  /* status pill -------------------------------------------------------- */
+  .status{ text-align:center; font-family:var(--serif); font-size:16px; margin:2px 0 10px; padding:11px 15px;
            border-radius:12px; border:1px solid transparent; }
-  .status.need{ background:rgba(178,58,72,.08); color:var(--warn); border-color:rgba(178,58,72,.28); }
-  .status.done{ background:rgba(47,125,79,.1); color:var(--ok); border-color:rgba(47,125,79,.3); }
+  .status.need{ background:rgba(168,58,99,.08); color:var(--warn); border-color:rgba(168,58,99,.28); }
+  .status.done{ background:rgba(31,122,109,.1); color:var(--ok); border-color:rgba(31,122,109,.3); }
 
-  /* per-journey inline hint (what this card still needs) -------------- */
   .leghint{ font-family:var(--serif); font-style:italic; font-size:14px; color:var(--ink-soft);
             margin:2px 0 8px; min-height:1em; transition:color .2s; }
   .leghint:empty{ display:none; }
@@ -184,45 +197,43 @@
           border:none; border-radius:12px; padding:15px 18px; cursor:pointer; transition:transform .15s, box-shadow .25s, filter .25s; }
   button:active{ transform:translateY(1px) scale(.995); }
   .primary{
-    position:relative; overflow:hidden; width:100%; color:#fff2d6;
-    background:linear-gradient(135deg,var(--wine),var(--plum2) 55%,var(--plum));
-    box-shadow:0 14px 30px -12px rgba(109,36,97,.9), inset 0 0 0 1px rgba(255,255,255,.08);
+    position:relative; overflow:hidden; width:100%; color:#3a2b08;
+    background:linear-gradient(135deg,var(--gold2),var(--gold));
+    box-shadow:0 14px 30px -12px rgba(184,145,47,.85), inset 0 0 0 1px rgba(255,255,255,.18);
     letter-spacing:.08em; text-transform:uppercase; font-size:14px;
   }
   .primary::after{ content:""; position:absolute; top:0; left:-60%; width:40%; height:100%;
-    background:linear-gradient(100deg,transparent,rgba(255,255,255,.4),transparent);
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent);
     transform:skewX(-18deg); transition:left .6s ease; }
   .primary:hover:not(:disabled)::after{ left:130%; }
-  .primary:hover:not(:disabled){ filter:brightness(1.06); box-shadow:0 18px 36px -12px rgba(109,36,97,1); }
-  .primary:disabled{ background:linear-gradient(135deg,#b9a0b4,#a98fa6); cursor:not-allowed; color:#fbeee9; box-shadow:none; }
-  .ghost{ width:100%; color:var(--plum2); background:transparent; border:1.5px dashed var(--line);
-          text-transform:uppercase; font-size:13px; letter-spacing:.08em; }
+  .primary:hover:not(:disabled){ filter:brightness(1.05); box-shadow:0 18px 38px -12px rgba(184,145,47,1); }
+  .primary:disabled{ background:linear-gradient(135deg,#d8cdb0,#c9bda0); cursor:not-allowed; color:#7a6f52; box-shadow:none; }
+  .ghost{ width:100%; color:var(--navy2); background:transparent; border:1.5px dashed var(--line);
+          text-transform:uppercase; font-size:12.5px; letter-spacing:.08em; padding:12px 16px; }
   .ghost:hover{ background:var(--cream2); border-color:var(--gold); }
   .link{ color:var(--wine); background:none; border:none; font-size:14px; padding:6px 0;
          cursor:pointer; font-weight:500; letter-spacing:.02em; }
-  .link:hover{ color:var(--plum); text-decoration:underline; }
+  .link:hover{ color:var(--navy); text-decoration:underline; }
 
-  /* messages ----------------------------------------------------------- */
   .msg{ padding:13px 15px; border-radius:12px; margin:14px 0; font-size:14px; display:none;
         border:1px solid transparent; }
   .msg.show{ display:block; animation:rise .35s ease both; }
-  .msg.err{ background:rgba(178,58,72,.09); color:var(--warn); border-color:rgba(178,58,72,.3); }
-  .msg.good{ background:rgba(47,125,79,.1); color:var(--ok); border-color:rgba(47,125,79,.3); }
+  .msg.err{ background:rgba(168,58,99,.09); color:var(--warn); border-color:rgba(168,58,99,.3); }
+  .msg.good{ background:rgba(31,122,109,.1); color:var(--ok); border-color:rgba(31,122,109,.3); }
   .hint{ font-size:13px; color:var(--ink-soft); font-family:var(--serif); font-style:italic; text-align:center; }
-  .hint b{ font-style:normal; color:var(--plum2); }
+  .hint b{ font-style:normal; color:var(--navy2); }
   .hidden{ display:none; }
 
-  /* loading ------------------------------------------------------------ */
   .spin{ text-align:center; padding:70px 20px; color:var(--cream); }
   .loader{ width:52px; height:52px; margin:0 auto 20px; border-radius:50%;
-           border:3px solid rgba(231,211,161,.3); border-top-color:var(--gold);
+           border:3px solid rgba(216,179,85,.3); border-top-color:var(--gold2);
            animation:spin 1s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
   .spin p{ font-family:var(--serif); font-style:italic; font-size:18px; letter-spacing:.04em; }
 
   .center{ text-align:center; }
   #done .seal{ font-size:46px; animation:pop .8s cubic-bezier(.22,1,.36,1) both; }
-  footer{ text-align:center; color:rgba(251,246,239,.5); font-family:var(--serif);
+  footer{ text-align:center; color:rgba(234,223,191,.6); font-family:var(--serif);
           font-style:italic; font-size:14px; padding:8px 0 4px; }
   @media (prefers-reduced-motion:reduce){
     *{ animation-duration:.001s !important; animation-iteration-count:1 !important; }
@@ -236,7 +247,12 @@
 
 <div class="wrap">
   <header>
-    <div class="monogram">✈️</div>
+    <svg class="arch" viewBox="0 0 520 300" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
+      <path d="M20 300 V110 Q20 30 120 24 Q260 12 260 12 Q260 12 400 24 Q500 30 500 110 V300"/>
+      <path d="M40 300 V116 Q40 46 130 40 Q260 30 260 30 Q260 30 390 40 Q480 46 480 116 V300" opacity=".55"/>
+    </svg>
+    <div class="monogram">✈</div>
+    <p class="hero-deva" id="heroDeva">शुभ यात्रा</p>
     <p class="eyebrow" id="eyebrow">Together with their families</p>
     <h1>Your <em>Travel</em></h1>
     <p class="dates" id="dates">Wedding Celebrations · August 2026</p>
@@ -271,14 +287,12 @@
   <!-- Step 2: travel legs -->
   <div id="form" class="card hidden">
     <h2 id="formTitle">Your journeys</h2>
-    <p class="hint" style="margin-bottom:4px;">Please tell us <b>when you arrive</b> and <b>when you leave</b> —
-       including the <b>date &amp; time</b> of each, so we can arrange your room and any pickups. Members travelling
-       together share one journey; add a separate journey for anyone arriving or leaving apart.</p>
+    <p class="hint" style="margin-bottom:4px;">Tell us <b>when you arrive</b> and <b>when you leave</b> —
+       with the <b>date &amp; time</b> of each, so we can have your room ready. Everything below assumes your
+       family travels together; if someone comes or leaves separately, just add a journey for them.</p>
     <div id="status" class="status hidden"></div>
 
     <div id="legs"></div>
-
-    <button id="addBtn" class="ghost" style="margin:10px 0 4px;">+ Add another journey</button>
 
     <div id="formMsg" class="msg"></div>
     <button id="saveBtn" class="primary" style="margin-top:14px;">Save our travel plans</button>
@@ -307,16 +321,24 @@ var MAX_TEXT = 200;                                   // keep in sync with TRAVE
 
 var $ = function (id) { return document.getElementById(id); };
 var familyKey = new URLSearchParams(location.search).get("family") || "";
-// legs: {legId,direction,who,people,mode,carrier,place,date,time,needsPickup,notes,_whoSet}
-var state = { legs: [], removeLegIds: [], roster: [], secret: "" };
+// legs: {legId,direction,who,people,mode,carrier,place,date,time,needsPickup,notes}
+// expectedCount = family headcount (Total) when the roster has no NAMED members;
+// 0 when named (per-member coverage drives it). Sent by the server on travelLoad.
+var state = { legs: [], removeLegIds: [], roster: [], secret: "", expectedCount: 0 };
 
 function show(id) { $(id).classList.remove("hidden"); }
 function hide(id) { $(id).classList.add("hidden"); }
+function sameDir(a, b) { return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase(); }
+function namedRosterCount() {
+  return state.roster.filter(function (m) { return String((m && m.name) || "").trim() !== ""; }).length;
+}
+/* Best-known family size: NAMED members if we have a roster, else the headcount. */
+function familySize() { var n = namedRosterCount(); return n > 0 ? n : (Number(state.expectedCount) || 0); }
 
 /* ---- client-side mirror of WebLogic.legCompleteness (keep in sync) ----
-   A journey only helps us plan a room/pickup once we know WHEN it is, so a
-   direction alone is not enough. Returns 'complete' (direction+date+time),
-   'partial' (started but no date and/or time), or 'bare' (direction only). ---- */
+   A journey only helps us plan a room once we know WHEN it is, so a direction
+   alone is not enough. 'complete' (date+time), 'partial' (started but missing
+   date and/or time), or 'bare' (nothing usable yet). ---- */
 function present(v) { return v !== null && v !== undefined && String(v).trim() !== ""; }
 function legComplete(l) {
   var dir = String((l && l.direction) || "").trim().toLowerCase();
@@ -328,19 +350,13 @@ function legComplete(l) {
   if (hasDate || hasTime || hasOther) return "partial";
   return "bare";
 }
-/* Per-card guidance: shows what a single journey still needs, so a guest doesn't
-   discover missing date/time only at Save time. Uses textContent (no HTML injection). */
+/* Per-card guidance so a guest doesn't discover missing date/time only at Save. */
 function updateLegHint(cardEl, leg) {
   var el = cardEl.querySelector('[data-role=leghint]');
   if (!el) return;
   var c = legComplete(leg);
   if (c === "complete") { el.textContent = "✓ All set for this journey."; el.className = "leghint ok"; return; }
-  if (c === "bare") {
-    el.textContent = leg.direction ? "Add the date & time (and any travel details) below."
-                                   : "Choose Arrival or Departure to begin.";
-    el.className = "leghint"; return;
-  }
-  // partial — name exactly what's missing
+  if (c === "bare") { el.textContent = "Add the date & time (and any travel details) below."; el.className = "leghint"; return; }
   var need = [];
   if (!present(leg.date)) need.push("date");
   if (!present(leg.time)) need.push("time");
@@ -349,29 +365,7 @@ function updateLegHint(cardEl, leg) {
   el.className = "leghint warn";
 }
 
-/* Family rollup from the current (unsaved) legs, mirroring WebLogic.travelStatus,
-   so the top pill updates LIVE as the guest edits — no save needed. */
-function computeStatus(legs) {
-  var rank = { none: 0, bare: 0, partial: 1, complete: 2 };
-  var arr = "none", dep = "none";
-  (legs || []).forEach(function (l) {
-    var c = legComplete(l); if (c === "bare") return;
-    var dir = String(l.direction || "").trim().toLowerCase();
-    if (dir === "arrival") { if (rank[c] > rank[arr]) arr = c; }
-    else if (dir === "departure") { if (rank[c] > rank[dep]) dep = c; }
-  });
-  var missing = [], incomplete = [];
-  if (arr === "none") missing.push("Arrival"); else if (arr === "partial") incomplete.push("Arrival");
-  if (dep === "none") missing.push("Departure"); else if (dep === "partial") incomplete.push("Departure");
-  return { arrivalState: arr, departureState: dep, missing: missing, incomplete: incomplete,
-           complete: arr === "complete" && dep === "complete" };
-}
-
-/* ---- client mirror of WebLogic per-member coverage (keep in sync) ----
-   A member is covered for a direction only if their name is on a COMPLETE
-   (date+time) leg in that direction. A leg whose "Who" is blank / "everyone" /
-   "all[ N][ of us]" covers the whole roster. Free-typed names that match no roster
-   member don't count toward coverage. ---- */
+/* ---- client mirrors of WebLogic per-member coverage (keep in sync) ---- */
 function normName(s) { return String(s == null ? "" : s).toLowerCase().replace(/\s+/g, " ").trim(); }
 function whoMeansEveryone(who) {
   var w = normName(who);
@@ -414,41 +408,71 @@ function joinNames(names) {
   if (names.length === 2) return names[0] + " and " + names[1];
   return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
 }
+
+/* ---- LIVE summary: the exact three-tier cascade of WebLogic.travelSummary,
+        so the top pill can never show a false "✓" on partial info (fix #4). ----
+        Tier 1: named roster → per-member coverage.
+        Tier 2: no names but headcount>1 → sum #People on COMPLETE legs per direction.
+        Tier 3: leg-level (1-person family, or headcount already met). ---- */
+function liveSummary() {
+  var legs = state.legs, roster = state.roster, expected = Math.max(0, Math.floor(Number(state.expectedCount) || 0));
+  var cov = computeCoverage(legs, roster);
+  if (cov.hasRoster) return { tier: "roster", complete: cov.complete, coverage: cov };
+
+  var arr = "none", dep = "none";
+  var rank = { none: 0, bare: 0, partial: 1, complete: 2 };
+  legs.forEach(function (l) {
+    var c = legComplete(l); if (c === "bare") return;
+    if (sameDir(l.direction, "arrival")) { if (rank[c] > rank[arr]) arr = c; }
+    else if (sameDir(l.direction, "departure")) { if (rank[c] > rank[dep]) dep = c; }
+  });
+  if (expected > 1) {
+    var headsArr = 0, headsDep = 0;
+    legs.forEach(function (l) {
+      if (legComplete(l) !== "complete") return;
+      var ppl = Number(l && l.people) > 0 ? Math.floor(Number(l.people)) : 0;
+      if (sameDir(l.direction, "arrival")) headsArr += ppl;
+      else if (sameDir(l.direction, "departure")) headsDep += ppl;
+    });
+    var aCov = Math.min(expected, headsArr), dCov = Math.min(expected, headsDep);
+    if (aCov < expected || dCov < expected) {
+      return { tier: "headcount", complete: false, expected: expected,
+               arrCovered: aCov, depCovered: dCov, owedArr: aCov < expected, owedDep: dCov < expected };
+    }
+  }
+  var missing = [], incomplete = [];
+  if (arr === "none") missing.push("Arrival"); else if (arr === "partial") incomplete.push("Arrival");
+  if (dep === "none") missing.push("Departure"); else if (dep === "partial") incomplete.push("Departure");
+  return { tier: "leg", complete: arr === "complete" && dep === "complete",
+           missing: missing, incomplete: incomplete };
+}
+
 function fatal(m) { hide("loading"); $("fatalMsg").textContent = m; show("fatal"); }
 function msg(el, text, kind) { el.textContent = text; el.className = "msg show " + kind; }
 function clearMsg(el) { el.className = "msg"; }
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+  return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
 
 /* ---- decorative falling petals (purely cosmetic) ---- */
 (function () {
   var box = $("petals"); if (!box) return;
-  var glyphs = ["✿","❀","✾","❁","·","✦"];
+  var glyphs = ["✦","✿","❀","·","✧","❁"];
   for (var i = 0; i < 14; i++) {
-    var p = document.createElement("span");
-    p.className = "petal";
-    p.textContent = glyphs[i % glyphs.length];
-    var left = (i * 7.3 + 4) % 100;
-    var dur = 13 + (i % 6) * 2.5;
-    var delay = (i % 7) * 1.6;
-    var size = 12 + (i % 5) * 4;
-    p.style.left = left + "vw";
-    p.style.fontSize = size + "px";
-    p.style.animationDuration = dur + "s";
-    p.style.animationDelay = "-" + delay + "s";
+    var p = document.createElement("span"); p.className = "petal"; p.textContent = glyphs[i % glyphs.length];
+    p.style.left = ((i * 7.3 + 4) % 100) + "vw";
+    p.style.fontSize = (12 + (i % 5) * 4) + "px";
+    p.style.animationDuration = (14 + (i % 6) * 2.5) + "s";
+    p.style.animationDelay = "-" + ((i % 7) * 1.6) + "s";
     box.appendChild(p);
   }
 })();
 
 function reveal(id) {
-  show(id);
-  var el = $(id);
+  show(id); var el = $(id);
   try { el.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) {}
 }
 
-/* ---- personalise the header: surname in the eyebrow, and ONLY the day(s) the
-        family is actually invited to in the dates line. The line starts neutral
-        (no day numbers) and cross-fades to the real day(s) after load, so a
-        31st-only guest never SEES "30th & 31st" flip to "31st" (reads as a glitch).
-        `events` is the sheet's event group: "30+31", "31" or "30". ---- */
+/* ---- personalise the header: surname + the day(s) the family is invited to ---- */
 function personalizeHeader(surname, events) {
   if (surname) $("eyebrow").textContent = "The " + surname + " Family";
   var digits = String(events || "").match(/\b(30|31)\b/g) || [];
@@ -458,12 +482,10 @@ function personalizeHeader(surname, events) {
   if (has30 && has31) when = d30 + " &amp; " + d31 + " August";
   else if (has31)     when = d31 + " August";
   else if (has30)     when = d30 + " August";
-  else                when = "30<sup>th</sup> &amp; 31<sup>st</sup> August";   // unknown -> both
+  else                when = "30<sup>th</sup> &amp; 31<sup>st</sup> August";
   var single = (has30 && !has31) || (has31 && !has30);
   var el = $("dates");
-  // gentle cross-fade so filling in the real day(s) reads as "loaded", not a glitch
-  el.style.transition = "opacity .35s ease";
-  el.style.opacity = "0";
+  el.style.transition = "opacity .35s ease"; el.style.opacity = "0";
   setTimeout(function () {
     el.innerHTML = (single ? "Wedding Function · " : "Wedding Functions · ") + when;
     el.style.opacity = "1";
@@ -493,21 +515,34 @@ if (!familyKey) {
 }
 
 /* ---- step 1 -> 2: verify by authenticated travelLoad ---- */
-function applyTravel(d) {
-  state.roster = (d.members || []).map(function (m) { return { memberId: m.memberId, name: m.name, ageGroup: m.ageGroup }; });
-  state.legs = (d.legs || []).map(function (l) {
+function adoptLegs(list) {
+  return (list || []).map(function (l) {
     return { legId: l.legId || "", direction: l.direction || "", who: l.who || "",
              people: Number(l.people) || 0, mode: l.mode || "", carrier: l.carrier || "",
              place: l.place || "", date: l.date || "", time: l.time || "",
              needsPickup: l.needsPickup || "", notes: l.notes || "" };
   });
+}
+function applyTravel(d) {
+  state.roster = (d.members || []).map(function (m) { return { memberId: m.memberId, name: m.name, ageGroup: m.ageGroup }; });
+  state.expectedCount = Number(d.expectedCount) || 0;
+  state.legs = adoptLegs(d.legs);
   state.removeLegIds = [];
-  // First visit with no legs yet: seed one Arrival + one Departure to fill in.
-  if (state.legs.length === 0) {
-    state.legs.push(blankLeg("Arrival"));
-    state.legs.push(blankLeg("Departure"));
-  }
-  renderLegs();   // calls refreshLiveStatus() -> coverage-aware top pill
+  ensureSectionSeed();     // guarantee one editable "everyone" card per empty section
+  renderLegs();
+}
+/* Every section should show at least one card so the guest has fields to fill.
+   A freshly-seeded card defaults to the WHOLE family (who blank = everyone); for a
+   headcount-only family it also carries the known #People so it can complete. */
+function ensureSectionSeed() {
+  DIRECTIONS.forEach(function (dir) {
+    var has = state.legs.some(function (l) { return sameDir(l.direction, dir); });
+    if (!has) state.legs.push(blankEveryoneLeg(dir));
+  });
+}
+function blankEveryoneLeg(direction) {
+  return { legId: "", direction: direction || "", who: "", people: namedRosterCount() ? 0 : familySize(),
+           mode: "", carrier: "", place: "", date: "", time: "", needsPickup: "", notes: "" };
 }
 
 function gateLoad(secret, onMsgEl, after) {
@@ -556,73 +591,84 @@ $("againBtn").addEventListener("click", function () {
     .catch(function () { clearMsg(fm); });
 });
 
-/* ---- travel status pill ----
-   A journey is only "done" once it carries a date AND a time (that's what lets us
-   plan the room + pickup). So we distinguish three things per direction:
-     • missing    — no usable journey yet → please ADD it
-     • incomplete — started, but the date and/or time is blank → please FINISH it
-     • complete   — date + time on file
-   `st.owed` = directions not yet complete; `st.missing` ⊂ owed = not-yet-added;
-   `st.incomplete` ⊂ owed = added-but-unfinished. ---- */
-function renderStatus(st) {
-  var el = $("status");
-  if (!st) { hide("status"); return; }
-  show("status");
+/* ---- travel status pill (driven by liveSummary — same tiers as the server) ---- */
+function renderStatus() {
+  var el = $("status"); show("status");
+  var s = liveSummary();
 
-  // Per-member coverage takes priority when we know the roster (the common case):
-  // it catches the "one person filed complete plans, the rest of the family hasn't"
-  // gap that a leg-only view misses.
-  if (st.coverage && st.coverage.hasRoster) {
-    var cov = st.coverage;
-    if (cov.complete) {
-      el.className = "status done";
+  if (s.complete) {
+    el.className = "status done";
+    if (s.tier === "roster")
       el.innerHTML = "✓ Everyone has an <b>arrival</b> and a <b>departure</b> — with dates &amp; times. Thank you! You can still edit below.";
-      return;
-    }
-    el.className = "status need";
-    var cparts = [];
+    else
+      el.innerHTML = "✓ We have your <b>arrival</b> and <b>departure</b> — with dates &amp; times. Thank you! You can still edit below.";
+    return;
+  }
+
+  el.className = "status need";
+
+  if (s.tier === "roster") {
+    var cov = s.coverage, cparts = [];
     if (cov.missingArrival.length)
       cparts.push("<b>arrival</b> plans for <b>" + esc(joinNames(cov.missingArrival)) + "</b>");
     if (cov.missingDeparture.length)
       cparts.push("<b>departure</b> plans for <b>" + esc(joinNames(cov.missingDeparture)) + "</b>");
-    el.innerHTML = "We still need " + cparts.join(", and ") +
-      " — with dates &amp; times. Tick who's on each journey below.";
+    el.innerHTML = "We still need " + cparts.join(", and ") + " — with dates &amp; times.";
     return;
   }
 
-  if (st.complete) {
-    el.className = "status done";
-    el.innerHTML = "✓ We have your <b>arrival</b> and <b>departure</b> — with dates &amp; times. Thank you! You can still edit below.";
+  if (s.tier === "headcount") {
+    var hparts = [];
+    if (s.owedArr) hparts.push("<b>arrival</b> (" + s.arrCovered + " of " + s.expected + " so far)");
+    if (s.owedDep) hparts.push("<b>departure</b> (" + s.depCovered + " of " + s.expected + " so far)");
+    el.innerHTML = "We still need everyone's " + hparts.join(", and ") + " — with dates &amp; times.";
     return;
   }
-  el.className = "status need";
-  var parts = [];
-  var missing = st.missing || [], incomplete = st.incomplete || [];
-  if (missing.length)
-    parts.push("please add your <b>" + esc(missing.join(" and ")) + "</b>");
-  if (incomplete.length)
-    parts.push("please add the <b>date &amp; time</b> for your <b>" + esc(incomplete.join(" and ")) + "</b>");
-  el.innerHTML = "Almost there — " + parts.join(", and ") + " below.";
+
+  // leg-level
+  var parts = [], missing = s.missing || [], incomplete = s.incomplete || [];
+  if (missing.length) parts.push("please add your <b>" + esc(missing.join(" and ")) + "</b>");
+  if (incomplete.length) parts.push("please add the <b>date &amp; time</b> for your <b>" + esc(incomplete.join(" and ")) + "</b>");
+  el.innerHTML = parts.length ? "Almost there — " + parts.join(", and ") + " below." : "Please add your travel details below.";
 }
 
-/* ---- render the editable leg list ---- */
+/* ---- render: two fixed sections, each holding its direction's journeys ---- */
 function blankLeg(direction) {
   return { legId: "", direction: direction || "", who: "", people: 0, mode: "", carrier: "",
            place: "", date: "", time: "", needsPickup: "", notes: "" };
 }
+function legsForDir(dir) {
+  var out = [];
+  state.legs.forEach(function (l, idx) { if (sameDir(l.direction, dir)) out.push({ leg: l, idx: idx }); });
+  return out;
+}
 function renderLegs() {
   var box = $("legs"); box.innerHTML = "";
-  if (state.legs.length === 0) state.legs.push(blankLeg("Arrival"));
-  state.legs.forEach(function (l, i) { box.appendChild(legNode(l, i)); });
+  ensureSectionSeed();
+  box.appendChild(sectionNode("Arrival", "When you arrive", "Reaching Jaipur", "sec-arr", "🛬"));
+  box.appendChild(sectionNode("Departure", "When you leave", "Heading home", "sec-dep", "🛫"));
   refreshLiveStatus();
 }
+function refreshLiveStatus() { renderStatus(); }
 
-/* Recompute the top pill from the CURRENT (unsaved) legs. Called after every edit so
-   the guest sees progress without pressing Save. */
-function refreshLiveStatus() {
-  var st = computeStatus(state.legs);
-  st.coverage = computeCoverage(state.legs, state.roster);
-  renderStatus(st);
+function sectionNode(dir, title, sub, cls, icon) {
+  var sec = document.createElement("div"); sec.className = "sec " + cls;
+  var head = document.createElement("div"); head.className = "sec-head";
+  head.innerHTML = '<div class="sec-ic">' + icon + '</div>' +
+    '<div><div class="sec-title">' + esc(title) + '<small>' + esc(sub) + '</small></div></div>';
+  sec.appendChild(head);
+
+  var items = legsForDir(dir);
+  var count = items.length;
+  items.forEach(function (it, n) { sec.appendChild(legNode(it.leg, it.idx, dir, count, n)); });
+
+  var add = document.createElement("button");
+  add.className = "ghost"; add.style.margin = "8px 0 4px";
+  add.textContent = count > 1 ? "+ Add another separate " + dir.toLowerCase() + " journey"
+                              : "+ Someone " + (dir === "Arrival" ? "arriving" : "leaving") + " separately?";
+  add.addEventListener("click", function () { state.legs.push(blankLeg(dir)); renderLegs(); });
+  sec.appendChild(add);
+  return sec;
 }
 
 /* Which roster names are currently named in this leg's "who" string. */
@@ -632,76 +678,75 @@ function whoSelected(whoStr) {
   return set;
 }
 
-function legNode(l, i) {
+function legNode(l, i, dir, sectionCount, ordinal) {
+  var named = namedRosterCount() > 0;
+  var everyone = whoMeansEveryone(l.who);
+  // Chips appear once travel is split (2+ journeys) or an existing leg already names
+  // specific people. A lone whole-family journey stays collapsed (fix #3).
+  var showChips = named && (sectionCount > 1 || !everyone);
+  // Headcount-only families (no names) state the number on each journey — that's what
+  // drives the server's headcount coverage tier. Named families derive #People from chips.
+  var showPeople = !named;
+  var showEveryone = !showChips && everyone && (named || sectionCount === 1);
+
   var div = document.createElement("div"); div.className = "leg";
-  var dirBadge = l.direction === "Departure" ? '<span class="badge dep">Departure</span>'
-               : l.direction === "Arrival"   ? '<span class="badge arr">Arrival</span>' : '';
-  var dirSel = '<select data-f="direction">' + optBlank("— arriving or leaving? —", l.direction) +
-    DIRECTIONS.map(function (d) { return opt(d, l.direction); }).join("") + '</select>';
+  var dirBadge = dir === "Departure" ? '<span class="badge dep">Departure</span>'
+                                     : '<span class="badge arr">Arrival</span>';
+  var heading = sectionCount > 1 ? (dir === "Arrival" ? "Arrival" : "Departure") + " journey " + (ordinal + 1)
+                                 : "Journey details";
   var modeSel = '<select data-f="mode">' + optBlank("— how? —", l.mode) +
     MODES.map(function (m) { return opt(m, l.mode); }).join("") + '</select>';
-  var pickupSel = '<select data-f="needsPickup">' + optBlank("— pickup? —", l.needsPickup) +
-    opt("Yes", l.needsPickup) + opt("No", l.needsPickup) + '</select>';
 
-  // Who — roster chips (if we know members); people count auto-updates but stays editable.
   var whoSet = whoSelected(l.who);
-  var whoChips = state.roster.length ? state.roster.map(function (m) {
-    var on = whoSet[String(m.name || "").trim().toLowerCase()] ? " on" : "";
-    var ck = on ? " checked" : "";
-    return '<label class="who-opt' + on + '"><input type="checkbox" data-who="' + esc(m.name || "") + '"' + ck + '> ' + esc(m.name || "") + '</label>';
-  }).join("") : "";
+  var whoChips = named ? state.roster.filter(function (m) { return String((m && m.name) || "").trim() !== ""; })
+    .map(function (m) {
+      var on = whoSet[String(m.name || "").trim().toLowerCase()] ? " on" : "";
+      var ck = on ? " checked" : "";
+      return '<label class="who-opt' + on + '"><input type="checkbox" data-who="' + esc(m.name || "") + '"' + ck + '> ' + esc(m.name || "") + '</label>';
+    }).join("") : "";
 
   div.innerHTML =
-    '<div class="head"><b>Journey ' + (i + 1) + '</b>' + dirBadge + '</div>' +
+    '<div class="lhead"><b>' + esc(heading) + '</b>' + dirBadge + '</div>' +
     '<div class="leghint" data-role="leghint"></div>' +
+    (showEveryone ? '<div class="everyone"><span class="who-ic">👪</span> This journey is for your <b>&nbsp;whole family</b>.</div>' : '') +
+    (showChips ? '<label>Who is on this journey?</label><div class="who-grid" data-role="whogrid">' + whoChips + '</div>' : '') +
     '<div class="row">' +
-      '<div><label>Direction</label>' + dirSel + '</div>' +
       '<div><label>Travel mode</label>' + modeSel + '</div>' +
-    '</div>' +
-    (state.roster.length ? '<label>Who is on this journey?</label><div class="who-grid" data-role="whogrid">' + whoChips + '</div>' : '') +
-    '<div class="row">' +
-      '<div><label>Who / how many' + (state.roster.length ? ' (or type)' : '') + '</label>' +
-        '<input type="text" data-f="who" maxlength="' + MAX_TEXT + '" placeholder="e.g. whole family" value="' + esc(l.who || "") + '"></div>' +
-      '<div style="flex:0 0 34%;"><label># People</label>' +
-        '<input type="number" data-f="people" min="0" max="100" value="' + (l.people ? l.people : "") + '"></div>' +
+      (showPeople ? '<div style="flex:0 0 38%;"><label># People</label>' +
+        '<input type="number" data-f="people" min="0" max="100" value="' + (l.people ? l.people : "") + '"></div>' : '') +
     '</div>' +
     '<div class="row">' +
       '<div><label>Flight / train / bus no.</label>' +
         '<input type="text" data-f="carrier" maxlength="' + MAX_TEXT + '" placeholder="e.g. AI 815 / 12951" value="' + esc(l.carrier || "") + '"></div>' +
       '<div><label>Airport / station / stop</label>' +
-        '<input type="text" data-f="place" maxlength="' + MAX_TEXT + '" placeholder="e.g. Indore Airport" value="' + esc(l.place || "") + '"></div>' +
+        '<input type="text" data-f="place" maxlength="' + MAX_TEXT + '" placeholder="e.g. Jaipur Airport" value="' + esc(l.place || "") + '"></div>' +
     '</div>' +
     '<div class="row">' +
       '<div><label>Date</label><input type="date" data-f="date" value="' + esc(l.date || "") + '"></div>' +
       '<div><label>Time</label><input type="time" data-f="time" value="' + esc(l.time || "") + '"></div>' +
     '</div>' +
-    '<label>Do you need a pickup / drop from us?</label>' + pickupSel +
     '<label>Notes (optional)</label>' +
     '<textarea data-f="notes" maxlength="' + MAX_TEXT + '" placeholder="Anything we should know — e.g. self-driving, arriving early, elderly guests…">' + esc(l.notes || "") + '</textarea>' +
-    '<div style="text-align:right;"><button class="link" data-role="remove" style="color:#b23a48;margin-top:4px;">✕ Remove this journey</button></div>';
+    (sectionCount > 1 ? '<div style="text-align:right;"><button class="link" data-role="remove" style="color:#a83a63;margin-top:4px;">✕ Remove this journey</button></div>' : '');
 
-  // wire the simple text/select fields
-  ["direction", "mode", "carrier", "place", "date", "time", "needsPickup", "notes", "who"].forEach(function (f) {
+  // wire the simple text/select fields (direction is fixed by section — not editable)
+  ["mode", "carrier", "place", "date", "time", "notes"].forEach(function (f) {
     var elx = div.querySelector('[data-f=' + f + ']');
     if (!elx) return;
     var ev = (elx.tagName === "SELECT") ? "change" : "input";
     elx.addEventListener(ev, function (e) {
       state.legs[i][f] = e.target.value;
-      if (f === "direction") { // refresh the badge without a full re-render losing focus elsewhere
-        renderLegs();
-      } else {
-        updateLegHint(div, state.legs[i]);   // live per-card "what's left" hint
-        refreshLiveStatus();                 // live top-of-form pill
-      }
+      updateLegHint(div, state.legs[i]);
+      refreshLiveStatus();
     });
   });
   var peopleEl = div.querySelector('[data-f=people]');
-  peopleEl.addEventListener("input", function (e) {
+  if (peopleEl) peopleEl.addEventListener("input", function (e) {
     state.legs[i].people = Number(e.target.value) || 0;
     updateLegHint(div, state.legs[i]); refreshLiveStatus();
   });
 
-  // roster chips: toggle a name in/out of the "who" string + keep people in sync
+  // roster chips: toggle a name in/out of "who" + keep #People in sync
   var grid = div.querySelector('[data-role=whogrid]');
   if (grid) {
     grid.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
@@ -713,42 +758,38 @@ function legNode(l, i) {
         });
         state.legs[i].who = names.join(", ");
         state.legs[i].people = names.length;
-        // reflect into the free-text + number fields
-        div.querySelector('[data-f=who]').value = state.legs[i].who;
-        peopleEl.value = state.legs[i].people ? state.legs[i].people : "";
         updateLegHint(div, state.legs[i]); refreshLiveStatus();
       });
     });
   }
 
-  div.querySelector('[data-role=remove]').addEventListener("click", function () {
+  var rm = div.querySelector('[data-role=remove]');
+  if (rm) rm.addEventListener("click", function () {
     var l2 = state.legs[i];
     if (!confirm("Remove this journey? This can't be undone once you Save.")) return;
     if (l2.legId && String(l2.legId).trim() !== "") state.removeLegIds.push(l2.legId);
     state.legs.splice(i, 1);
     renderLegs();
   });
-  updateLegHint(div, l);   // seed the per-card hint on first render
+  updateLegHint(div, l);
   return div;
 }
 function opt(v, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + '>' + esc(v) + '</option>'; }
 function optBlank(label, cur) { return '<option value=""' + (!cur ? " selected" : "") + '>' + esc(label) + '</option>'; }
-
-$("addBtn").addEventListener("click", function () { state.legs.push(blankLeg("")); renderLegs(); });
 
 /* ---- save: validate lightly, then POST travelSave ---- */
 $("saveBtn").addEventListener("click", function () {
   var fm = $("formMsg");
   // Keep only legs the guest actually filled in (a blank seeded row is not an error).
   var filled = state.legs.filter(function (l) {
-    return (l.direction || l.who || l.mode || l.carrier || l.place || l.date || l.time || (Number(l.people) > 0));
+    return (l.who || l.mode || l.carrier || l.place || l.date || l.time || (Number(l.people) > 0));
   });
   if (filled.length === 0 && state.removeLegIds.length === 0) {
     msg(fm, "Please add at least one journey (when you arrive or leave).", "err"); return;
   }
-  // Every filled journey needs a direction (Arrival / Departure) — it drives rooms + pickups.
+  // Direction is guaranteed by the section, but guard anyway.
   var noDir = filled.filter(function (l) { return DIRECTIONS.indexOf(l.direction) === -1; });
-  if (noDir.length) { msg(fm, "Please pick Arrival or Departure for each journey.", "err"); return; }
+  if (noDir.length) { msg(fm, "Something went wrong with a journey — please refresh and try again.", "err"); return; }
 
   $("saveBtn").disabled = true; msg(fm, "Saving… please wait.", "good");
   var body = { family: familyKey, secret: state.secret, action: "travelSave",
@@ -770,38 +811,37 @@ $("saveBtn").addEventListener("click", function () {
           (d && d.detail ? " (" + d.detail + ")" : ""), "err");
         return;
       }
-      var st = d.travelStatus || {};
-      var cov = (d.summary && d.summary.coverage) || null;
+      // Adopt the server's canonical legs (WITH their minted Leg IDs) so a subsequent
+      // save UPDATES rather than duplicates.
+      if (Array.isArray(d.legs)) { state.legs = adoptLegs(d.legs); state.removeLegIds = []; }
+
+      // Confirmation is driven ENTIRELY by the server's tiered summary.complete — the
+      // single source of truth (roster coverage → headcount → leg-level). This is why a
+      // family that filed only partial info can never see a false "✓" here (fix #4).
+      var sm = d.summary || {};
+      var cov = sm.coverage || null;
       var html = "Your travel plans are saved.";
-      if (cov && cov.hasRoster) {
-        // Per-member coverage: tell the guest exactly WHO still needs plans.
-        if (cov.complete) {
-          html += "<br>Everyone has an <b>arrival</b> and a <b>departure</b> — with dates &amp; times ✓";
-        } else {
-          var cbits = [];
-          if (cov.missingArrival && cov.missingArrival.length)
-            cbits.push("<b>arrival</b> plans for <b>" + esc(joinNames(cov.missingArrival)) + "</b>");
-          if (cov.missingDeparture && cov.missingDeparture.length)
-            cbits.push("<b>departure</b> plans for <b>" + esc(joinNames(cov.missingDeparture)) + "</b>");
-          if (cbits.length) html += "<br>Still to do: add " + cbits.join(", and ") + " (with dates &amp; times).";
-        }
-      } else if (st.complete) {
-        html += "<br>We have your <b>arrival</b> and <b>departure</b> — with dates &amp; times ✓";
-      } else {
-        var bits = [];
-        if (st.missing && st.missing.length) bits.push("add your <b>" + esc(st.missing.join(" and ")) + "</b>");
-        if (st.incomplete && st.incomplete.length)
-          bits.push("add the <b>date &amp; time</b> for your <b>" + esc(st.incomplete.join(" and ")) + "</b>");
-        if (bits.length) html += "<br>Still to do: " + bits.join(", and ") + ".";
+      if (sm.complete) {
+        html += (cov && cov.hasRoster)
+          ? "<br>Everyone has an <b>arrival</b> and a <b>departure</b> — with dates &amp; times ✓"
+          : "<br>We have your <b>arrival</b> and <b>departure</b> — with dates &amp; times ✓";
+      } else if (cov && cov.hasRoster) {
+        var cbits = [];
+        if (cov.missingArrival && cov.missingArrival.length)
+          cbits.push("<b>arrival</b> plans for <b>" + esc(joinNames(cov.missingArrival)) + "</b>");
+        if (cov.missingDeparture && cov.missingDeparture.length)
+          cbits.push("<b>departure</b> plans for <b>" + esc(joinNames(cov.missingDeparture)) + "</b>");
+        if (cbits.length) html += "<br>Still to do: add " + cbits.join(", and ") + " (with dates &amp; times).";
+      } else if (sm.missingText) {
+        html += "<br>Still to do: add " + esc(sm.missingText) + " (with dates &amp; times).";
+      } else if (sm.owed && sm.owed.length) {
+        html += "<br>Still to do: add your <b>" + esc(sm.owed.join(" and ").toLowerCase()) + "</b> (with dates &amp; times).";
       }
       $("doneMsg").innerHTML = html;
       hide("form"); reveal("done");
     })
     .catch(function () { $("saveBtn").disabled = false; msg(fm, "Network error — please retry.", "err"); });
 });
-
-function esc(s) { return String(s).replace(/[&<>"']/g, function (c) {
-  return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
 </script>
 </body>
 </html>
