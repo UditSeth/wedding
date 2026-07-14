@@ -22,7 +22,7 @@
   DESIGN (matches the agreed decisions):
    • No Google login for guests.
    • Two factors: (1) the unguessable uuid in the link, (2) a shared secret =
-     SURNAME + last-5-digits of the family head's phone (e.g. SHARMA_78888).
+     SURNAME + last-5-digits of the family head's phone (e.g. SETH12345).
    • Affirmation ("You are the Sharma family, head: Rakesh Sharma?") before the
      secret, so a wrong link is caught early.
    • Member-keyed edit: the page shows who we ALREADY have, so a second family
@@ -327,7 +327,7 @@
     <p id="affirm" class="sub reveal d1"></p>
     <label for="secret">Family access code</label>
     <input id="secret" type="text" autocomplete="off" autocapitalize="characters"
-           placeholder="e.g. SHARMA_78888" />
+           placeholder="e.g. SETH12345" />
     <p class="hint">Your code = <b>SURNAME</b> + the <b>last 5 digits</b> of the family head's
        WhatsApp number. Spaces, dashes and case don't matter.</p>
     <div id="gateMsg" class="msg err"></div>
@@ -682,10 +682,29 @@ $("addBtn").addEventListener("click", function () {
 $("rsvp").addEventListener("change", markDirty);
 
 /* ---- step 2 -> save: build payload (base64 files) and POST ---- */
+/* A guest row is "engaged" if the family actually started it: a name typed, an
+   ID file attached, or it's an already-saved member (has a memberId). A purely-
+   empty row (the auto-seeded blank, or a trailing "+ Add guest" they never filled)
+   is NOT engaged and is ignored — so making the name mandatory never blocks the
+   delete-all or add-then-cancel flows. */
+function memberEngaged(m) {
+  return (m.name || "").trim() !== "" || !!m._file ||
+         (m.memberId && String(m.memberId).trim() !== "");
+}
+
 $("saveBtn").addEventListener("click", function () {
   var fm = $("formMsg");
   var rsvp = $("rsvp").value;
   var named = state.members.filter(function (m) { return (m.name || "").trim() !== ""; });
+  // Name is mandatory: an engaged guest row (ID file attached, or an already-saved
+  // member) must carry a name — otherwise it would be silently dropped on save,
+  // losing that person's ID upload / record. Flag the first offender by position.
+  for (var mi = 0; mi < state.members.length; mi++) {
+    var mm = state.members[mi];
+    if (memberEngaged(mm) && (mm.name || "").trim() === "") {
+      msg(fm, "Please enter a name for Guest " + (mi + 1) + " (or remove that guest).", "err"); return;
+    }
+  }
   // Allow a save that only removes people (named can be 0 if they're deleting);
   // otherwise require at least one name so an empty form isn't a no-op save.
   if (named.length === 0 && state.removeIds.length === 0) { msg(fm, "Please enter at least one name.", "err"); return; }
@@ -721,8 +740,9 @@ $("saveBtn").addEventListener("click", function () {
     }
     var miss = (d.idProgress && d.idProgress.missingNames) || [];
     var failed = d.uploadFailures || [];
-    var html = "Your RSVP is saved for <b>" + (d.headcount ? d.headcount.total : named.length) + "</b> guest(s)" +
-      (d.attendingLabel ? " for <b>" + esc(d.attendingLabel) + "</b>" : "") + ".";
+    var gcount = d.headcount ? d.headcount.total : named.length;
+    var html = "Your RSVP is saved for <b>" + gcount + "</b> guest" + (gcount === 1 ? "" : "s") +
+      (d.attendingLabel ? ", joining us on <b>" + esc(d.attendingLabel) + "</b>" : "") + ".";
     if (failed.length)
       html += "<br><span style='color:#a83a63'>⚠ These ID uploads did <b>not</b> save — please open the link again and re-upload: <b>" +
         esc(failed.join(", ")) + "</b>.</span>";

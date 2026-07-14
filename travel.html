@@ -167,10 +167,11 @@
   @media (max-width:460px){ .leg .row{ flex-direction:column; gap:0; } }
 
   /* "whole family" default banner ------------------------------------- */
-  .everyone{ display:flex; align-items:center; gap:9px; font-family:var(--serif); font-size:16px;
+  .everyone{ font-family:var(--serif); font-size:16px; line-height:1.5;
              color:var(--teal); background:rgba(31,122,109,.09); border:1px solid rgba(31,122,109,.28);
-             border-radius:12px; padding:9px 13px; margin:6px 0 2px; }
-  .everyone .who-ic{ font-size:18px; }
+             border-radius:12px; padding:10px 14px; margin:6px 0 2px; }
+  .everyone .who-ic{ font-size:18px; margin-right:6px; }
+  .everyone .fam-names{ color:var(--ink); }
 
   .who-grid{ display:flex; flex-wrap:wrap; gap:8px; margin:2px 0 4px; }
   .who-opt{ display:inline-flex; align-items:center; gap:8px; font-family:var(--serif); font-size:16px;
@@ -179,6 +180,11 @@
   .who-opt:hover{ border-color:var(--gold); background:#fff; }
   .who-opt input{ width:17px; height:17px; accent-color:var(--wine); flex:0 0 auto; }
   .who-opt.on{ background:rgba(184,145,47,.16); border-color:var(--gold); }
+  /* claimed by another journey in this direction — locked here (mutually exclusive) */
+  .who-opt.claimed{ opacity:.5; cursor:not-allowed; background:#f6f3ee; border-style:dashed; }
+  .who-opt.claimed:hover{ border-color:var(--line); background:#f6f3ee; }
+  .who-opt .claimed-note{ font-size:11px; color:var(--ink-soft); font-style:italic; }
+  .datehint{ font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
 
   .badge{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600;
           letter-spacing:.06em; padding:5px 11px; border-radius:30px; white-space:nowrap; }
@@ -328,7 +334,7 @@
     <p id="affirm" class="sub reveal d1"></p>
     <label for="secret">Family access code</label>
     <input id="secret" type="text" autocomplete="off" autocapitalize="characters"
-           placeholder="e.g. SHARMA12345" />
+           placeholder="e.g. SETH12345" />
     <p class="hint">Your code = <b>SURNAME</b> + the <b>last 5 digits</b> of the family head's
        WhatsApp number. Spaces, dashes and case don't matter.</p>
     <div id="gateMsg" class="msg err"></div>
@@ -370,12 +376,50 @@ var DIRECTIONS = ["Arrival", "Departure"];
 var MODES = ["Flight", "Train", "Bus", "Car (self)", "Cab / Taxi", "Other"];
 var MAX_TEXT = 200;                                   // keep in sync with TRAVEL_LIMITS.MAX_TEXT_LEN
 
+// Allowed travel-date window (fix #4). The bounds are SHEET-DRIVEN: the server
+// computes, per family, the earliest they may arrive and the latest they may
+// leave from the Config tab (invited days + arrival lead + last day) and sends
+// them on travelLoad as {min,max} ISO strings. These are just OUTER bounds — a
+// guest can always arrive/leave earlier within the window. The fallbacks here
+// only apply if an older server build sends nothing (never blocks a save).
+var dateBounds = { arrivalMin: "", arrivalMax: "", departureMin: "", departureMax: "" };
+
 var $ = function (id) { return document.getElementById(id); };
 var familyKey = new URLSearchParams(location.search).get("family") || "";
 // legs: {legId,direction,who,people,mode,carrier,place,date,time,needsPickup,notes}
 // expectedCount = family headcount (Total) when the roster has no NAMED members;
 // 0 when named (per-member coverage drives it). Sent by the server on travelLoad.
 var state = { legs: [], removeLegIds: [], roster: [], secret: "", expectedCount: 0, homeUrl: "", dirty: false };
+
+/* Bounds for a direction's date input (fix #4). Returns {min,max} ISO or ""s. */
+function boundsFor(dir) {
+  return sameDir(dir, "Departure")
+    ? { min: dateBounds.departureMin || "", max: dateBounds.departureMax || "" }
+    : { min: dateBounds.arrivalMin || "", max: dateBounds.arrivalMax || "" };
+}
+/* Human "29 Aug – 1 Sep" style hint for a bounds pair (blank if unknown). */
+function boundsHint(b) {
+  if (!b || (!b.min && !b.max)) return "";
+  var f = function (iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+    if (!m) return "";
+    var MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return String(Number(m[3])) + " " + MON[Number(m[2]) - 1];
+  };
+  var lo = f(b.min), hi = f(b.max);
+  if (lo && hi) return lo + " – " + hi;
+  if (lo) return "on or after " + lo;
+  if (hi) return "on or before " + hi;
+  return "";
+}
+/* True when an ISO date is inside [min,max] (blank bound = open on that side). */
+function dateInBounds(iso, b) {
+  var d = String(iso || "").trim();
+  if (d === "") return true;                 // "no date" is handled by the mandatory check, not here
+  if (b.min && d < b.min) return false;
+  if (b.max && d > b.max) return false;
+  return true;
+}
 
 function show(id) { $(id).classList.remove("hidden"); }
 function hide(id) { $(id).classList.add("hidden"); }
@@ -398,6 +442,11 @@ function isEditing() {
 function sameDir(a, b) { return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase(); }
 function namedRosterCount() {
   return state.roster.filter(function (m) { return String((m && m.name) || "").trim() !== ""; }).length;
+}
+/* The NAMED roster members, in sheet order (used for the whole-family banner + chips). */
+function rosterNames() {
+  return state.roster.map(function (m) { return String((m && m.name) || "").trim(); })
+    .filter(function (n) { return n !== ""; });
 }
 /* Best-known family size: NAMED members if we have a roster, else the headcount. */
 function familySize() { var n = namedRosterCount(); return n > 0 ? n : (Number(state.expectedCount) || 0); }
@@ -621,6 +670,14 @@ function adoptLegs(list) {
 }
 function applyTravel(d) {
   setHomeUrl(d);
+  // Sheet-driven allowed-date window for THIS family (fix #4). Absent on older
+  // server builds -> bounds stay blank -> inputs are unrestricted (no regression).
+  if (d && d.dateBounds && typeof d.dateBounds === "object") {
+    dateBounds = { arrivalMin: String(d.dateBounds.arrivalMin || ""),
+                   arrivalMax: String(d.dateBounds.arrivalMax || ""),
+                   departureMin: String(d.dateBounds.departureMin || ""),
+                   departureMax: String(d.dateBounds.departureMax || "") };
+  }
   state.roster = (d.members || []).map(function (m) { return { memberId: m.memberId, name: m.name, ageGroup: m.ageGroup }; });
   state.expectedCount = Number(d.expectedCount) || 0;
   state.legs = adoptLegs(d.legs);
@@ -764,7 +821,22 @@ function sectionNode(dir, title, sub, cls, icon) {
   add.className = "ghost"; add.style.margin = "8px 0 4px";
   add.textContent = count > 1 ? "+ Add another separate " + dir.toLowerCase() + " journey"
                               : "+ Someone " + (dir === "Arrival" ? "arriving" : "leaving") + " separately?";
-  add.addEventListener("click", function () { state.legs.push(blankLeg(dir)); markDirty(); renderLegs(); });
+  add.addEventListener("click", function () {
+    // Fix #2: when a family with a NAMED roster splits a whole-family journey, MATERIALIZE
+    // the existing "everyone" leg into explicit names first. Otherwise both the old and the
+    // new leg would read who="" (=everyone) and mutual-exclusion would dead-lock every name.
+    // After this, journey 1 holds all names (all checked) and the new journey starts empty,
+    // so a name only rides one journey per direction. Headcount-only families keep #People.
+    if (namedRosterCount() > 0) {
+      legsForDir(dir).forEach(function (it) {
+        if (whoMeansEveryone(it.leg.who)) {
+          it.leg.who = rosterNames().join(", ");
+          it.leg.people = rosterNames().length;
+        }
+      });
+    }
+    state.legs.push(blankLeg(dir)); markDirty(); renderLegs();
+  });
   sec.appendChild(add);
   return sec;
 }
@@ -774,6 +846,27 @@ function whoSelected(whoStr) {
   var set = {};
   String(whoStr || "").split(",").forEach(function (p) { var t = p.trim().toLowerCase(); if (t) set[t] = true; });
   return set;
+}
+
+/* Fix #2: within ONE direction, a person may ride exactly ONE journey. Returns a
+   map {lowerName: "Arrival journey 2"} of names ALREADY claimed by OTHER legs in
+   this direction, so this card can lock them out. Arrival and departure are
+   independent — a name claimed for arrival stays free to pick for departure.
+   A whole-family leg (who blank) claims the ENTIRE roster; but the single, unsplit
+   whole-family journey never locks anyone (there are no siblings to conflict with). */
+function claimedByOthers(dir, currentIdx) {
+  var claimed = {};
+  var items = legsForDir(dir);          // [{leg, idx}] in this direction, in order
+  if (items.length <= 1) return claimed; // no split -> nothing is "taken elsewhere"
+  var all = rosterNames();
+  items.forEach(function (it, n) {
+    if (it.idx === currentIdx) return;  // skip THIS leg
+    var names = whoMeansEveryone(it.leg.who) ? all.slice()
+      : all.filter(function (nm) { return whoSelected(it.leg.who)[nm.toLowerCase()]; });
+    var label = (dir === "Arrival" ? "arrival" : "departure") + " journey " + (n + 1);
+    names.forEach(function (nm) { var k = nm.toLowerCase(); if (!claimed[k]) claimed[k] = label; });
+  });
+  return claimed;
 }
 
 function legNode(l, i, dir, sectionCount, ordinal) {
@@ -806,14 +899,35 @@ function legNode(l, i, dir, sectionCount, ordinal) {
 
   // Chip checked-state: an "everyone" leg (who blank) defaults ALL names checked, so
   // splitting off a separate journey keeps the rest of the family selected here rather
-  // than silently unchecking everyone.
+  // than silently unchecking everyone. Fix #2: names already claimed by ANOTHER journey
+  // in this direction are shown DISABLED + unchecked ("on <that> journey") so a person
+  // rides exactly one journey per direction. Arrival/departure claims are independent.
   var whoSet = whoSelected(l.who);
+  var claimed = claimedByOthers(dir, i);
   var whoChips = named ? state.roster.filter(function (m) { return String((m && m.name) || "").trim() !== ""; })
     .map(function (m) {
-      var on = (everyone || whoSet[String(m.name || "").trim().toLowerCase()]) ? " on" : "";
+      var key = String(m.name || "").trim().toLowerCase();
+      var takenElsewhere = claimed.hasOwnProperty(key);
+      var on = (!takenElsewhere && (everyone || whoSet[key])) ? " on" : "";
       var ck = on ? " checked" : "";
-      return '<label class="who-opt' + on + '"><input type="checkbox" data-who="' + esc(m.name || "") + '"' + ck + '> ' + esc(m.name || "") + '</label>';
+      var cls = "who-opt" + on + (takenElsewhere ? " claimed" : "");
+      var dis = takenElsewhere ? " disabled" : "";
+      var note = takenElsewhere ? ' <span class="claimed-note">on ' + esc(claimed[key]) + '</span>' : "";
+      return '<label class="' + cls + '"><input type="checkbox" data-who="' + esc(m.name || "") + '"' + ck + dis + '> ' + esc(m.name || "") + note + '</label>';
     }).join("") : "";
+
+  // Fix #1: the whole-family banner reads as one clean sentence AND lists the members
+  // by name for clarity (falls back to a count for headcount-only families).
+  var famList = rosterNames();
+  var everyoneText = famList.length
+    ? 'This journey is for your <b>whole family</b> — <span class="fam-names">' + esc(joinNames(famList)) + '</span> (' + famList.length + ').'
+    : 'This journey is for your <b>whole family</b>' + (famN > 0 ? ' (' + famN + ')' : '') + '.';
+
+  // Fix #4: restrict the date picker to this family's allowed window (sheet-driven).
+  var b = boundsFor(dir);
+  var dateAttrs = (b.min ? ' min="' + esc(b.min) + '"' : "") + (b.max ? ' max="' + esc(b.max) + '"' : "");
+  var bh = boundsHint(b);
+  var dateHintHtml = bh ? '<div class="datehint">Allowed: ' + esc(bh) + '</div>' : "";
 
   var peopleField = peopleFixed
     ? '<div style="flex:0 0 42%;"><label># People</label>' +
@@ -824,8 +938,7 @@ function legNode(l, i, dir, sectionCount, ordinal) {
   div.innerHTML =
     '<div class="lhead"><b>' + esc(heading) + '</b>' + dirBadge + '</div>' +
     '<div class="leghint" data-role="leghint"></div>' +
-    (showEveryone ? '<div class="everyone"><span class="who-ic">👪</span> This journey is for your <b>&nbsp;whole family</b>' +
-        (famN > 0 ? ' <span style="opacity:.8">(' + famN + ')</span>' : '') + '.</div>' : '') +
+    (showEveryone ? '<div class="everyone"><span class="who-ic">👪</span>' + everyoneText + '</div>' : '') +
     (showChips ? '<label>Who is on this journey?</label><div class="who-grid" data-role="whogrid">' + whoChips + '</div>' : '') +
     '<div class="row">' +
       '<div><label>Travel mode</label>' + modeSel + '</div>' +
@@ -838,7 +951,8 @@ function legNode(l, i, dir, sectionCount, ordinal) {
         '<input type="text" data-f="place" maxlength="' + MAX_TEXT + '" placeholder="e.g. Jaipur Airport" value="' + esc(l.place || "") + '"></div>' +
     '</div>' +
     '<div class="row">' +
-      '<div><label>Date</label><input type="date" data-f="date" value="' + esc(l.date || "") + '"></div>' +
+      '<div><label>Date</label><input type="date" data-f="date"' + dateAttrs +
+        ' value="' + esc(l.date || "") + '">' + dateHintHtml + '</div>' +
       '<div><label>Time</label><input type="time" data-f="time" value="' + esc(l.time || "") + '"></div>' +
     '</div>' +
     '<label>Notes (optional)</label>' +
@@ -867,20 +981,23 @@ function legNode(l, i, dir, sectionCount, ordinal) {
   // no events. Pin the headcount into state so the leg is "filled" and serializes correctly.
   if (peopleFixed) state.legs[i].people = famN;
 
-  // roster chips: toggle a name in/out of "who" + keep #People in sync
+  // roster chips: toggle a name in/out of "who" + keep #People in sync. A full
+  // re-render keeps fix #2's mutual-exclusion locks live: checking a name here
+  // immediately locks it (disabled + "on this journey") in every SIBLING journey
+  // of this direction. Disabled (claimed) checkboxes fire no change (can't toggle).
   var grid = div.querySelector('[data-role=whogrid]');
   if (grid) {
     grid.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
       cb.addEventListener("change", function () {
+        if (cb.disabled) return;
         var names = [];
         grid.querySelectorAll('input[type=checkbox]').forEach(function (c2) {
-          c2.parentNode.classList.toggle("on", c2.checked);
-          if (c2.checked) names.push(c2.getAttribute("data-who"));
+          if (c2.checked && !c2.disabled) names.push(c2.getAttribute("data-who"));
         });
         state.legs[i].who = names.join(", ");
         state.legs[i].people = names.length;
         markDirty();
-        updateLegHint(div, state.legs[i]); refreshLiveStatus();
+        renderLegs();     // refresh sibling legs so claimed names lock/unlock across the direction
       });
     });
   }
@@ -900,19 +1017,63 @@ function legNode(l, i, dir, sectionCount, ordinal) {
 function opt(v, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? " selected" : "") + '>' + esc(v) + '</option>'; }
 function optBlank(label, cur) { return '<option value=""' + (!cur ? " selected" : "") + '>' + esc(label) + '</option>'; }
 
-/* ---- save: validate lightly, then POST travelSave ---- */
+/* A leg the guest has actually started (any field touched). A blank seeded row isn't. */
+function legStarted(l) {
+  return !!(l.who || l.mode || l.carrier || l.place || l.date || l.time || (Number(l.people) > 0));
+}
+/* Friendly journey label for a validation message, e.g. "arrival journey 2" or
+   "your arrival journey" when the direction has only one. */
+function journeyLabel(leg) {
+  var dir = sameDir(leg.direction, "Departure") ? "departure" : "arrival";
+  var sibs = legsForDir(leg.direction === "Departure" ? "Departure" : "Arrival");
+  if (sibs.length <= 1) return "your " + dir + " journey";
+  var n = 0;
+  for (var i = 0; i < sibs.length; i++) { if (sibs[i].leg === leg) { n = i + 1; break; } }
+  return dir + " journey " + (n || "");
+}
+
+/* ---- save: validate mandatory fields (fix #3) + date window (fix #4), then POST ---- */
 $("saveBtn").addEventListener("click", function () {
   var fm = $("formMsg");
   // Keep only legs the guest actually filled in (a blank seeded row is not an error).
-  var filled = state.legs.filter(function (l) {
-    return (l.who || l.mode || l.carrier || l.place || l.date || l.time || (Number(l.people) > 0));
-  });
+  var filled = state.legs.filter(legStarted);
   if (filled.length === 0 && state.removeLegIds.length === 0) {
     msg(fm, "Please add at least one journey (when you arrive or leave).", "err"); return;
   }
   // Direction is guaranteed by the section, but guard anyway.
   var noDir = filled.filter(function (l) { return DIRECTIONS.indexOf(l.direction) === -1; });
   if (noDir.length) { msg(fm, "Something went wrong with a journey — please refresh and try again.", "err"); return; }
+
+  // Fix #3 — mandatory fields on every STARTED journey: Date, Time, Travel mode; and
+  // for a SEPARATE journey (a direction split into 2+), at least one person on it.
+  // A single whole-family journey needs no person check (it covers everyone).
+  var named = namedRosterCount() > 0;
+  for (var vi = 0; vi < filled.length; vi++) {
+    var lg = filled[vi];
+    var lbl = journeyLabel(lg);
+    var isSeparate = legsForDir(lg.direction === "Departure" ? "Departure" : "Arrival").length > 1;
+    var miss = [];
+    if (!present(lg.date)) miss.push("date");
+    if (!present(lg.time)) miss.push("time");
+    if (!present(lg.mode)) miss.push("travel mode");
+    if (miss.length) {
+      msg(fm, "Please add the " + joinNames(miss) + " for " + lbl + ".", "err"); return;
+    }
+    if (isSeparate) {
+      var onLeg = named ? (whoMeansEveryone(lg.who) ? rosterNames().length
+                                                    : legNames(lg, state.roster).length)
+                        : (Number(lg.people) || 0);
+      if (onLeg < 1) {
+        msg(fm, "Please choose who is on " + lbl + " (at least one person).", "err"); return;
+      }
+    }
+    // Fix #4 — date must fall inside this family's allowed window.
+    var db = boundsFor(lg.direction);
+    if (!dateInBounds(lg.date, db)) {
+      var hint = boundsHint(db);
+      msg(fm, "The date for " + lbl + " must be " + (hint ? "within " + hint : "inside the allowed window") + ".", "err"); return;
+    }
+  }
 
   $("saveBtn").disabled = true; msg(fm, "Saving… please wait.", "good");
   var body = { family: familyKey, secret: state.secret, action: "travelSave",
