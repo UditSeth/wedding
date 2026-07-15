@@ -185,9 +185,10 @@
   .who-opt:hover{ border-color:var(--gold); background:#fff; }
   .who-opt input{ width:17px; height:17px; accent-color:var(--wine); flex:0 0 auto; }
   .who-opt.on{ background:rgba(184,145,47,.16); border-color:var(--gold); }
-  /* claimed by another journey in this direction — locked here (mutually exclusive) */
-  .who-opt.claimed{ opacity:.5; cursor:not-allowed; background:#f6f3ee; border-style:dashed; }
-  .who-opt.claimed:hover{ border-color:var(--line); background:#f6f3ee; }
+  /* currently on ANOTHER journey in this direction — still CLICKABLE (ticking MOVES the
+     person here). A soft dashed style + hint distinguishes it from a free/checked name. */
+  .who-opt.elsewhere{ background:#f6f3ee; border-style:dashed; color:var(--ink-soft); }
+  .who-opt.elsewhere:hover{ border-color:var(--gold); background:#fff; }
   .who-opt .claimed-note{ font-size:11px; color:var(--ink-soft); font-style:italic; }
   .datehint{ font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
 
@@ -877,27 +878,48 @@ function whoSelected(whoStr) {
   return set;
 }
 
-/* Fix #2: within ONE direction, a person may ride exactly ONE journey. Returns a
-   map {lowerName: "Arrival journey 2"} of names ALREADY claimed by OTHER legs in
-   this direction, so this card can lock them out. Arrival and departure are
-   independent — a name claimed for arrival stays free to pick for departure.
-   An explicit everyone-keyword leg claims the ENTIRE roster, but a BLANK "who" (a
-   freshly-split, not-yet-filled journey) claims NOBODY — otherwise it would lock every
-   checkbox on its sibling and dead-lock the split (issue 1). The single, unsplit journey
-   never locks anyone (there are no siblings to conflict with). */
+/* The roster names EXPLICITLY assigned to a leg, for the split/checkbox model:
+   a BLANK "who" is NOBODY (an unfilled journey — NOT everyone), an everyone-keyword
+   is the WHOLE roster, otherwise the parsed name list. This is the single source of
+   truth for chip checked-state, auto-move, and the "at least one person" check — so a
+   freshly-split blank journey shows no ticks and correctly counts as 0 people. */
+function legAssignedNames(leg) {
+  if (whoIsEmpty(leg && leg.who)) return [];
+  var all = rosterNames();
+  if (whoMeansEveryone(leg && leg.who)) return all.slice();
+  var sel = whoSelected(leg && leg.who);
+  return all.filter(function (nm) { return sel[nm.toLowerCase()]; });
+}
+
+/* AUTO-MOVE (mutual exclusion by MOVING, not disabling): assign/unassign `name` to the
+   leg at state index `targetIdx` within `dir`. Ticking a name here REMOVES it from every
+   other journey in the same direction, so a person always rides exactly one journey per
+   direction — no "uncheck the other side first" step, no dead-lock. Arrival and departure
+   are independent. Each touched leg's #People is kept in sync with its names. */
+function moveNameToLeg(dir, targetIdx, name, on) {
+  var key = String(name == null ? "" : name).trim().toLowerCase();
+  legsForDir(dir).forEach(function (it) {
+    var names = legAssignedNames(it.leg).filter(function (n) { return n.toLowerCase() !== key; });
+    if (it.idx === targetIdx && on) names.push(name);   // this leg gains the name
+    it.leg.who = names.join(", ");                       // others simply drop it
+    it.leg.people = names.length;
+  });
+}
+
+/* Where each roster name currently rides in OTHER journeys of this direction, as a map
+   {lowerName: "arrival journey 2"} — used ONLY to show a "(on journey N)" hint next to an
+   unticked box so the guest knows ticking it will MOVE that person here. NOT a lock: in
+   the auto-move model every checkbox stays clickable. A BLANK "who" claims nobody. */
 function claimedByOthers(dir, currentIdx) {
   var claimed = {};
   var items = legsForDir(dir);          // [{leg, idx}] in this direction, in order
-  if (items.length <= 1) return claimed; // no split -> nothing is "taken elsewhere"
-  var all = rosterNames();
+  if (items.length <= 1) return claimed; // no split -> nothing is "elsewhere"
   items.forEach(function (it, n) {
     if (it.idx === currentIdx) return;  // skip THIS leg
-    // A blank "who" is UNFILLED, not "everyone" — it claims nobody (see whoIsEmpty).
-    var names = whoIsEmpty(it.leg.who) ? []
-      : (whoMeansEveryone(it.leg.who) ? all.slice()
-        : all.filter(function (nm) { return whoSelected(it.leg.who)[nm.toLowerCase()]; }));
     var label = (dir === "Arrival" ? "arrival" : "departure") + " journey " + (n + 1);
-    names.forEach(function (nm) { var k = nm.toLowerCase(); if (!claimed[k]) claimed[k] = label; });
+    legAssignedNames(it.leg).forEach(function (nm) {
+      var k = nm.toLowerCase(); if (!claimed[k]) claimed[k] = label;
+    });
   });
   return claimed;
 }
@@ -952,23 +974,24 @@ function legNode(l, i, dir, sectionCount, ordinal) {
   var modeSel = '<select data-f="mode">' + optBlank("— how? —", l.mode) +
     MODES.map(function (m) { return opt(m, l.mode); }).join("") + '</select>';
 
-  // Chip checked-state: an "everyone" leg (who blank) defaults ALL names checked, so
-  // splitting off a separate journey keeps the rest of the family selected here rather
-  // than silently unchecking everyone. Fix #2: names already claimed by ANOTHER journey
-  // in this direction are shown DISABLED + unchecked ("on <that> journey") so a person
-  // rides exactly one journey per direction. Arrival/departure claims are independent.
-  var whoSet = whoSelected(l.who);
+  // Chip checked-state (AUTO-MOVE model): a box is CHECKED when this leg holds the name.
+  // Names currently on ANOTHER journey are shown UNCHECKED but fully CLICKABLE, with a
+  // soft "(on journey N)" hint — ticking one MOVES that person here (removing them from the
+  // other journey). No disabled boxes, so the guest is never stuck. Arrival/departure
+  // claims are independent. A materialized whole-family leg lists everyone as checked here.
+  var mine = {};
+  legAssignedNames(l).forEach(function (nm) { mine[nm.toLowerCase()] = true; });
   var claimed = claimedByOthers(dir, i);
   var whoChips = named ? state.roster.filter(function (m) { return String((m && m.name) || "").trim() !== ""; })
     .map(function (m) {
       var key = String(m.name || "").trim().toLowerCase();
-      var takenElsewhere = claimed.hasOwnProperty(key);
-      var on = (!takenElsewhere && (everyone || whoSet[key])) ? " on" : "";
-      var ck = on ? " checked" : "";
-      var cls = "who-opt" + on + (takenElsewhere ? " claimed" : "");
-      var dis = takenElsewhere ? " disabled" : "";
-      var note = takenElsewhere ? ' <span class="claimed-note">on ' + esc(claimed[key]) + '</span>' : "";
-      return '<label class="' + cls + '"><input type="checkbox" data-who="' + esc(m.name || "") + '"' + ck + dis + '> ' + esc(m.name || "") + note + '</label>';
+      var isMine = mine.hasOwnProperty(key);
+      var elsewhere = !isMine && claimed.hasOwnProperty(key);
+      var on = isMine ? " on" : "";
+      var ck = isMine ? " checked" : "";
+      var cls = "who-opt" + on + (elsewhere ? " elsewhere" : "");
+      var note = elsewhere ? ' <span class="claimed-note">on ' + esc(claimed[key]) + '</span>' : "";
+      return '<label class="' + cls + '"><input type="checkbox" data-who="' + esc(m.name || "") + '"' + ck + '> ' + esc(m.name || "") + note + '</label>';
     }).join("") : "";
 
   // Fix #1: the whole-family banner reads as one clean sentence AND lists the members
@@ -1038,23 +1061,18 @@ function legNode(l, i, dir, sectionCount, ordinal) {
   // no events. Pin the headcount into state so the leg is "filled" and serializes correctly.
   if (peopleFixed) state.legs[i].people = famN;
 
-  // roster chips: toggle a name in/out of "who" + keep #People in sync. A full
-  // re-render keeps fix #2's mutual-exclusion locks live: checking a name here
-  // immediately locks it (disabled + "on this journey") in every SIBLING journey
-  // of this direction. Disabled (claimed) checkboxes fire no change (can't toggle).
+  // roster chips (AUTO-MOVE): ticking a name assigns it to THIS journey and removes it
+  // from every sibling in the same direction (moveNameToLeg); unticking simply drops it
+  // here. A full re-render then refreshes every sibling's checked-state + "(on journey N)"
+  // hints. Because moving is atomic, a person can never be double-booked and no box is
+  // ever disabled — the guest is never stuck. Arrival/departure are independent.
   var grid = div.querySelector('[data-role=whogrid]');
   if (grid) {
     grid.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
       cb.addEventListener("change", function () {
-        if (cb.disabled) return;
-        var names = [];
-        grid.querySelectorAll('input[type=checkbox]').forEach(function (c2) {
-          if (c2.checked && !c2.disabled) names.push(c2.getAttribute("data-who"));
-        });
-        state.legs[i].who = names.join(", ");
-        state.legs[i].people = names.length;
+        moveNameToLeg(dir, i, cb.getAttribute("data-who"), cb.checked);
         markDirty();
-        renderLegs();     // refresh sibling legs so claimed names lock/unlock across the direction
+        renderLegs();     // re-render so the moved name flips across the whole direction
       });
     });
   }
@@ -1143,9 +1161,8 @@ $("saveBtn").addEventListener("click", function () {
     if (!present(lg.time)) { flagLegField(idx, "time");
       msg(fm, "Please add the time for " + lbl + ".", "err"); return; }
     if (isSeparate) {
-      var onLeg = named ? (whoMeansEveryone(lg.who) ? rosterNames().length
-                                                    : legNames(lg, state.roster).length)
-                        : (Number(lg.people) || 0);
+      // Auto-move model: a leg's people are exactly its assigned names (blank who = 0).
+      var onLeg = named ? legAssignedNames(lg).length : (Number(lg.people) || 0);
       if (onLeg < 1) {
         flagLegField(idx, named ? null : "people");
         msg(fm, named ? "Please tick at least one person for " + lbl + "."

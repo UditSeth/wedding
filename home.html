@@ -607,8 +607,11 @@ function armReveals(){
 
 /* ---------- fetch feed ---------- */
 function boot(){
+  // Same guard as rsvp.html / travel.html: a link with no family code is not a real
+  // invitation — showcase the missing-code message instead of fetching (cuts stray traffic).
+  if(!familyKey){ fail("This link is missing its family code."); return; }
   if(API_URL.indexOf("PASTE_")===0){ fail("This page isn't configured yet."); return; }
-  var url = API_URL + "?page=home" + (familyKey ? "&family="+encodeURIComponent(familyKey) : "");
+  var url = API_URL + "?page=home&family="+encodeURIComponent(familyKey);
   fetch(url).then(function(r){ return r.json(); })
     .then(function(d){ if(!d||!d.ok){ fail("We couldn't load the invitation."); return; } render(d); })
     .catch(function(){ fail("Network error — please refresh."); });
