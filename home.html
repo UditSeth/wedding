@@ -147,7 +147,15 @@
   .hero-meta{ display:flex; gap:12px 26px; flex-wrap:wrap; align-items:center; justify-content:center;
     font-family:var(--sans); letter-spacing:.06em; color:var(--cream); font-size:clamp(13.5px,2.2vw,16px); }
   .hero-meta b{ color:var(--gold2); font-weight:600; }
-  .hero-meta .dot{ width:5px; height:5px; border-radius:50%; background:var(--gold); opacity:.7; }
+  /* keep each phrase (dates / venue) on one line so only the two items break apart */
+  .hero-meta > span:not(.dot){ white-space:nowrap; }
+  .hero-meta .dot{ width:5px; height:5px; border-radius:50%; background:var(--gold); opacity:.7; flex:0 0 auto; }
+  /* mobile: stack dates over venue, drop the separator dot (a divider makes no sense
+     between vertically-stacked lines) so nothing orphans on its own line */
+  @media (max-width:560px){
+    .hero-meta{ flex-direction:column; gap:7px; }
+    .hero-meta .dot{ display:none; }
+  }
   .greet{ margin:16px auto 0; font-family:var(--serif); font-size:clamp(16px,2.6vw,20px);
     color:#fff; background:rgba(255,255,255,.08); border:1px solid rgba(216,179,85,.4);
     padding:8px 20px; border-radius:999px; backdrop-filter:blur(3px); }
@@ -225,7 +233,9 @@
   .welcome .quote::before{ content:"❝"; color:var(--gold); font-size:34px; display:block; margin-bottom:-6px; }
   .welcome .whenwhere{ display:flex; gap:10px 34px; justify-content:center; flex-wrap:wrap;
     margin-top:22px; font-family:var(--sans); letter-spacing:.05em; color:var(--navy); }
+  .welcome .whenwhere > span{ white-space:nowrap; }
   .welcome .whenwhere b{ color:var(--gold); }
+  @media (max-width:560px){ .welcome .whenwhere{ flex-direction:column; gap:7px; } }
 
   /* detail tiles (event timeline / venue / other host links) */
   .detail-grid{ display:grid; gap:14px; grid-template-columns:1fr; }
@@ -286,7 +296,7 @@
   /* contact */
   .contacts{ display:flex; gap:18px; flex-wrap:wrap; justify-content:center; margin-top:10px; }
   .card{ background:#fffaf0; border:1px solid var(--line); border-radius:16px;
-    padding:22px 26px; text-align:center; min-width:230px; box-shadow:0 14px 34px -22px rgba(15,42,74,.5); }
+    padding:22px 26px; text-align:center; min-width:min(230px,100%); box-shadow:0 14px 34px -22px rgba(15,42,74,.5); }
   .card .cname{ font-family:var(--display); font-weight:600; color:var(--navy); font-size:20px; }
   .card .crole{ color:var(--ink-soft); font-family:var(--serif); font-style:italic; margin-bottom:12px; }
   .card .cbtns{ display:flex; gap:10px; justify-content:center; }
@@ -316,6 +326,8 @@
     font-family:var(--serif); font-style:italic; }
   footer.foot .venue{ font-family:var(--display); font-style:normal; color:var(--navy);
     font-size:clamp(20px,3.4vw,28px); letter-spacing:.04em; margin-bottom:6px; }
+  footer.foot .foot-host{ font-style:normal; color:var(--navy); letter-spacing:.03em;
+    margin-top:12px; }
 
   /* floating controls (music + share + top) */
   .fabs{ position:fixed; right:14px; bottom:14px; z-index:40; display:flex; flex-direction:column; gap:10px; }
@@ -542,7 +554,7 @@
   <footer class="foot">
     <div class="venue" id="footVenue"></div>
     <div id="footDates"></div>
-    <div style="margin-top:10px;">Made with love ✨</div>
+    <div class="foot-host" id="footHost"></div>
   </footer>
 </div>
 
@@ -679,6 +691,7 @@ function render(d){
   if(nonEmpty(w.closing_message)) $("closingMsg").innerHTML = "“"+nl2br(w.closing_message)+"”";
   else hideSection("closingBand");
   setText("footVenue", w.venue); setText("footDates", dateLine);
+  setText("footHost", hostSignoff(d.hostFamily, "we can't wait to welcome you"));
 
   // controls
   setupShare(w);
@@ -694,6 +707,17 @@ function render(d){
 
 /* ---------- helpers ---------- */
 function nonEmpty(v){ return v!=null && String(v).trim()!==""; }
+// One closing line that folds the host (Config HOST_FAMILY) into the farewell, so the
+// sign-off is never doubled: "Made with love, the Seth family — <tail> ✨". A blank host
+// degrades to the plain "Made with love — <tail> ✨" (host mentioned mid-sentence, so no
+// leading-letter capitalisation is needed).
+function hostSignoff(host, tail){
+  host = String(host==null?"":host).trim();
+  var lead = host ? "Made with love, " + host : "Made with love";
+  // Bind the "—" to the lead with a non-breaking space so, if the line wraps on a
+  // narrow screen, the separator never orphans at the start of a line.
+  return lead + "\u00A0— " + tail + " ✨";
+}
 function setText(id,v){ var e=$(id); if(e) e.textContent = nonEmpty(v)? v : ""; }
 function setB(id,v){ var e=$(id); if(!e) return; var b=e.querySelector("b"); if(b) b.textContent = nonEmpty(v)? v : ""; }
 function toggle(id,v){ var e=$(id); if(e) e.classList.toggle("hidden", !nonEmpty(v)); }

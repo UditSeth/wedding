@@ -318,7 +318,7 @@
     <p class="hero-deva" id="heroDeva">शुभ यात्रा</p>
     <p class="eyebrow" id="eyebrow">Together with their families</p>
     <h1>Your <em>Travel</em></h1>
-    <p class="dates" id="dates">Wedding Celebrations · August 2026</p>
+    <p class="dates" id="dates">Wedding Celebrations&nbsp;· August 2026</p>
     <div class="rule"><span>❧</span></div>
   </header>
 
@@ -370,7 +370,7 @@
     <button id="againBtn" class="link">Make another change</button>
   </div>
 
-  <footer>Made with love · Safe travels, and see you soon ✨</footer>
+  <footer id="pageFooter">Made with love · Safe travels, and see you soon ✨</footer>
 </div>
 
 <script>
@@ -581,6 +581,14 @@ function msg(el, text, kind) { el.textContent = text; el.className = "msg show "
 function clearMsg(el) { el.className = "msg"; }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
   return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+// Fold the host (Config HOST_FAMILY) into the page's own farewell as ONE line, so the
+// sign-off is never doubled: "Made with love, the Seth family · Safe travels, and see
+// you soon ✨". Blank host -> leave the default generic markup untouched.
+function setHostFooter(host) {
+  host = String(host == null ? "" : host).trim();
+  var el = $("pageFooter"); if (!el || !host) return;
+  el.textContent = "Made with love, " + host + "\u00A0· Safe travels, and see you soon ✨";
+}
 
 /* ---- decorative falling petals (purely cosmetic) ---- */
 (function () {
@@ -644,7 +652,7 @@ function personalizeHeader(surname, events) {
   var el = $("dates");
   el.style.transition = "opacity .35s ease"; el.style.opacity = "0";
   setTimeout(function () {
-    el.innerHTML = (single ? "Wedding Function · " : "Wedding Functions · ") + when;
+    el.innerHTML = (single ? "Wedding Function\u00A0· " : "Wedding Functions\u00A0· ") + when;
     el.style.opacity = "1";
   }, 200);
 }
@@ -662,6 +670,7 @@ if (!familyKey) {
       if (!d || !d.ok) { fatal(d && d.error === "not found"
         ? "We couldn't find your family for this link." : "Something went wrong loading your details."); return; }
       state.surname = d.surname; state.headName = d.headName; state.events = d.events || "";
+      setHostFooter(d.hostFamily);
       setHomeUrl(d);
       personalizeHeader(d.surname, d.events);
       $("affirm").innerHTML = "You are the <b>" + esc(d.surname || "—") + "</b> family" +
