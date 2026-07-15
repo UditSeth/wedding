@@ -139,6 +139,11 @@
   input:focus, select:focus, textarea:focus{
     border-color:var(--gold); box-shadow:0 0 0 4px rgba(184,145,47,.18); background:#fff;
   }
+  /* fix #4 — a field flagged by save validation, cleared on next edit */
+  input.field-error, select.field-error, textarea.field-error{
+    border-color:var(--warn); box-shadow:0 0 0 3px rgba(168,58,99,.16); background:#fff7f9;
+  }
+  .leg.leg-error{ box-shadow:0 0 0 2px rgba(168,58,99,.35); }
   select{ appearance:none; -webkit-appearance:none;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%230f2a4a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
     background-repeat:no-repeat; background-position:right 16px center; padding-right:40px; }
@@ -797,6 +802,23 @@ function legsForDir(dir) {
   state.legs.forEach(function (l, idx) { if (sameDir(l.direction, dir)) out.push({ leg: l, idx: idx }); });
   return out;
 }
+/* Fix #1: after removing a separate journey, if a direction is back to ONE leg,
+   recollapse it to the whole-family default (who="" / people=famSize) so the guest
+   returns to the "This journey is for your whole family" banner rather than being
+   stranded on a single explicit name-list card left over from the split. Only the
+   materialized "everyone became names" case is reverted — a genuinely partial pick
+   (the guest un-checked someone) is left alone. */
+function recollapseIfSingle(dir) {
+  var items = legsForDir(dir);
+  if (items.length !== 1) return;
+  var leg = items[0].leg;
+  if (namedRosterCount() > 0) {
+    // Was this the auto-materialized whole family (all names selected)? If so, collapse.
+    var all = rosterNames().map(function (n) { return n.toLowerCase(); }).sort().join("|");
+    var cur = legNames(leg, state.roster).map(function (n) { return n.toLowerCase(); }).sort().join("|");
+    if (cur === all) { leg.who = ""; leg.people = rosterNames().length; }
+  }
+}
 function renderLegs() {
   var box = $("legs"); box.innerHTML = "";
   ensureSectionSeed();
@@ -869,6 +891,27 @@ function claimedByOthers(dir, currentIdx) {
   return claimed;
 }
 
+/* Fix #2 client pre-check: the first roster member double-booked in one direction,
+   as a ready-to-show message (or "" when clean). Mirrors WebLogic.travelOverlapErrors. */
+function firstOverlap(legs) {
+  var dirs = ["Arrival", "Departure"];
+  for (var di = 0; di < dirs.length; di++) {
+    var dir = dirs[di], seen = {};
+    for (var li = 0; li < legs.length; li++) {
+      if (!sameDir(legs[li].direction, dir)) continue;
+      var names = legNames(legs[li], state.roster);
+      for (var ni = 0; ni < names.length; ni++) {
+        var k = names[ni].toLowerCase();
+        if (seen[k]) return names[ni] + " is on two " + dir.toLowerCase() +
+          " journeys — each person can only be on one " + dir.toLowerCase() +
+          " journey (arrival and departure are separate).";
+        seen[k] = true;
+      }
+    }
+  }
+  return "";
+}
+
 function legNode(l, i, dir, sectionCount, ordinal) {
   var named = namedRosterCount() > 0;
   var everyone = whoMeansEveryone(l.who);
@@ -890,6 +933,7 @@ function legNode(l, i, dir, sectionCount, ordinal) {
   var peopleEdit  = !named && !peopleFixed;
 
   var div = document.createElement("div"); div.className = "leg";
+  div.setAttribute("data-leg-idx", String(i));     // fix #4: lets save-validation find & highlight fields
   var dirBadge = dir === "Departure" ? '<span class="badge dep">Departure</span>'
                                      : '<span class="badge arr">Arrival</span>';
   var heading = sectionCount > 1 ? (dir === "Arrival" ? "Arrival" : "Departure") + " journey " + (ordinal + 1)
@@ -966,6 +1010,8 @@ function legNode(l, i, dir, sectionCount, ordinal) {
     var ev = (elx.tagName === "SELECT") ? "change" : "input";
     elx.addEventListener(ev, function (e) {
       state.legs[i][f] = e.target.value;
+      e.target.classList.remove("field-error");   // fix #4: clear the flag as they correct it
+      div.classList.remove("leg-error");
       markDirty();
       updateLegHint(div, state.legs[i]);
       refreshLiveStatus();
@@ -1007,7 +1053,12 @@ function legNode(l, i, dir, sectionCount, ordinal) {
     var l2 = state.legs[i];
     if (!confirm("Remove this journey? This can't be undone once you Save.")) return;
     if (l2.legId && String(l2.legId).trim() !== "") state.removeLegIds.push(l2.legId);
+    var removedDir = l2.direction;
     state.legs.splice(i, 1);
+    // Fix #1: if deleting a separate journey drops this direction back to a SINGLE
+    // leg, recollapse it to the "whole family" default (who=""), so the guest returns
+    // to the banner state they started from instead of a lone stranded name-list card.
+    recollapseIfSingle(removedDir);
     markDirty();
     renderLegs();
   });
@@ -1032,50 +1083,83 @@ function journeyLabel(leg) {
   return dir + " journey " + (n || "");
 }
 
+/* fix #4: highlight a specific field (by data-f) inside the leg card at state index
+   `idx`, scroll it into view, and focus it — so the guest sees EXACTLY what's wrong. */
+function flagLegField(idx, field) {
+  var card = document.querySelector('.leg[data-leg-idx="' + idx + '"]');
+  if (!card) return;
+  card.classList.add("leg-error");
+  var el = field ? card.querySelector('[data-f=' + field + ']') : null;
+  if (el) { el.classList.add("field-error"); }
+  (el || card).scrollIntoView({ behavior: "smooth", block: "center" });
+  if (el && el.focus) { try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); } }
+}
+/* Clear all prior field/leg error highlights before re-validating. */
+function clearFieldErrors() {
+  document.querySelectorAll(".field-error").forEach(function (n) { n.classList.remove("field-error"); });
+  document.querySelectorAll(".leg-error").forEach(function (n) { n.classList.remove("leg-error"); });
+}
+
 /* ---- save: validate mandatory fields (fix #3) + date window (fix #4), then POST ---- */
 $("saveBtn").addEventListener("click", function () {
   var fm = $("formMsg");
+  clearFieldErrors();
   // Keep only legs the guest actually filled in (a blank seeded row is not an error).
-  var filled = state.legs.filter(legStarted);
+  // Track the ORIGINAL state index so we can highlight the exact card/field (fix #4).
+  var filled = [];
+  state.legs.forEach(function (l, idx) { if (legStarted(l)) filled.push({ leg: l, idx: idx }); });
   if (filled.length === 0 && state.removeLegIds.length === 0) {
-    msg(fm, "Please add at least one journey (when you arrive or leave).", "err"); return;
+    msg(fm, "Please add at least one journey — tell us when you arrive or leave.", "err"); return;
   }
   // Direction is guaranteed by the section, but guard anyway.
-  var noDir = filled.filter(function (l) { return DIRECTIONS.indexOf(l.direction) === -1; });
+  var noDir = filled.filter(function (it) { return DIRECTIONS.indexOf(it.leg.direction) === -1; });
   if (noDir.length) { msg(fm, "Something went wrong with a journey — please refresh and try again.", "err"); return; }
 
   // Fix #3 — mandatory fields on every STARTED journey: Date, Time, Travel mode; and
   // for a SEPARATE journey (a direction split into 2+), at least one person on it.
   // A single whole-family journey needs no person check (it covers everyone).
+  // Fix #4 — each error names the exact field + journey AND highlights the field.
   var named = namedRosterCount() > 0;
   for (var vi = 0; vi < filled.length; vi++) {
-    var lg = filled[vi];
+    var lg = filled[vi].leg, idx = filled[vi].idx;
     var lbl = journeyLabel(lg);
     var isSeparate = legsForDir(lg.direction === "Departure" ? "Departure" : "Arrival").length > 1;
-    var miss = [];
-    if (!present(lg.date)) miss.push("date");
-    if (!present(lg.time)) miss.push("time");
-    if (!present(lg.mode)) miss.push("travel mode");
-    if (miss.length) {
-      msg(fm, "Please add the " + joinNames(miss) + " for " + lbl + ".", "err"); return;
-    }
+    // Flag the FIRST missing mandatory field (in field order) so focus lands on it.
+    if (!present(lg.mode)) { flagLegField(idx, "mode");
+      msg(fm, "Please choose the travel mode for " + lbl + " (Flight, Train, etc.).", "err"); return; }
+    if (!present(lg.date)) { flagLegField(idx, "date");
+      msg(fm, "Please add the date for " + lbl + ".", "err"); return; }
+    if (!present(lg.time)) { flagLegField(idx, "time");
+      msg(fm, "Please add the time for " + lbl + ".", "err"); return; }
     if (isSeparate) {
       var onLeg = named ? (whoMeansEveryone(lg.who) ? rosterNames().length
                                                     : legNames(lg, state.roster).length)
                         : (Number(lg.people) || 0);
       if (onLeg < 1) {
-        msg(fm, "Please choose who is on " + lbl + " (at least one person).", "err"); return;
+        flagLegField(idx, named ? null : "people");
+        msg(fm, named ? "Please tick at least one person for " + lbl + "."
+                      : "Please enter how many people are on " + lbl + ".", "err"); return;
       }
     }
     // Fix #4 — date must fall inside this family's allowed window.
     var db = boundsFor(lg.direction);
     if (!dateInBounds(lg.date, db)) {
+      flagLegField(idx, "date");
       var hint = boundsHint(db);
-      msg(fm, "The date for " + lbl + " must be " + (hint ? "within " + hint : "inside the allowed window") + ".", "err"); return;
+      msg(fm, "The date for " + lbl + " must be " + (hint ? "between " + hint : "inside the allowed window") +
+        ". You entered " + esc(lg.date) + ".", "err"); return;
     }
   }
 
+  // Fix #2 — no member on two journeys in the same direction (client pre-check; the
+  // server enforces this too). Catches any stale-state overlap the disabled chips missed.
+  if (named) {
+    var dupErr = firstOverlap(filled.map(function (it) { return it.leg; }));
+    if (dupErr) { msg(fm, dupErr, "err"); return; }
+  }
+
   $("saveBtn").disabled = true; msg(fm, "Saving… please wait.", "good");
+  filled = filled.map(function (it) { return it.leg; });   // server wants the legs, not the {leg,idx} wrappers
   var body = { family: familyKey, secret: state.secret, action: "travelSave",
                legs: filled, removeLegIds: state.removeLegIds };
   fetch(API_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },

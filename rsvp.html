@@ -150,6 +150,11 @@
   input[type=text]:focus, input[type=tel]:focus, select:focus{
     border-color:var(--gold); box-shadow:0 0 0 4px rgba(201,163,78,.18); background:#fff;
   }
+  /* a field flagged by save validation, cleared on next edit */
+  input.field-error, select.field-error{
+    border-color:var(--warn); box-shadow:0 0 0 3px rgba(178,58,72,.16); background:#fff7f8;
+  }
+  .member.member-error{ box-shadow:0 0 0 2px rgba(178,58,72,.35); }
   input[type=file]{
     width:100%; font-size:13px; font-family:var(--sans); color:var(--ink-soft);
     padding:9px 0;
@@ -632,6 +637,7 @@ function addMember() {
 }
 function memberNode(m, i) {
   var div = document.createElement("div"); div.className = "member";
+  div.setAttribute("data-member-idx", String(i));
   var badge = m.idReceived ? '<span class="badge ok">✓ ID on file</span>'
                            : '<span class="badge no">ID needed</span>';
   div.innerHTML =
@@ -647,7 +653,11 @@ function memberNode(m, i) {
     '<div class="filechip" data-role="chip"></div>' +
     '<div style="text-align:right;"><button class="link" data-role="remove" style="color:#a83a63;margin-top:4px;">✕ Remove this guest</button></div>';
   // wire inputs back into state
-  div.querySelector('[data-f=name]').addEventListener("input", function (e) { state.members[i].name = e.target.value; markDirty(); });
+  div.querySelector('[data-f=name]').addEventListener("input", function (e) {
+    state.members[i].name = e.target.value;
+    e.target.classList.remove("field-error"); div.classList.remove("member-error");
+    markDirty();
+  });
   div.querySelector('[data-f=ageGroup]').addEventListener("change", function (e) { state.members[i].ageGroup = e.target.value; markDirty(); });
   div.querySelector('[data-role=remove]').addEventListener("click", function () {
     var m2 = state.members[i];
@@ -681,33 +691,46 @@ $("addBtn").addEventListener("click", function () {
 /* the RSVP dropdown is an edit too */
 $("rsvp").addEventListener("change", markDirty);
 
-/* ---- step 2 -> save: build payload (base64 files) and POST ---- */
-/* A guest row is "engaged" if the family actually started it: a name typed, an
-   ID file attached, or it's an already-saved member (has a memberId). A purely-
-   empty row (the auto-seeded blank, or a trailing "+ Add guest" they never filled)
-   is NOT engaged and is ignored — so making the name mandatory never blocks the
-   delete-all or add-then-cancel flows. */
-function memberEngaged(m) {
-  return (m.name || "").trim() !== "" || !!m._file ||
-         (m.memberId && String(m.memberId).trim() !== "");
+/* ---- field-error highlighting (item 4) ---- */
+function clearFieldErrors() {
+  var els = document.querySelectorAll(".field-error, .member-error");
+  for (var k = 0; k < els.length; k++) els[k].classList.remove("field-error", "member-error");
+}
+// Highlight the name input on member row `idx` in red, scroll it into view and focus.
+function flagMemberName(idx) {
+  var row = document.querySelector('.member[data-member-idx="' + idx + '"]');
+  if (!row) return;
+  row.classList.add("member-error");
+  var inp = row.querySelector('[data-f=name]');
+  if (inp) { inp.classList.add("field-error"); inp.scrollIntoView({ block: "center" }); inp.focus(); }
 }
 
+/* ---- step 2 -> save: build payload (base64 files) and POST ---- */
 $("saveBtn").addEventListener("click", function () {
   var fm = $("formMsg");
+  clearFieldErrors();
   var rsvp = $("rsvp").value;
   var named = state.members.filter(function (m) { return (m.name || "").trim() !== ""; });
-  // Name is mandatory: an engaged guest row (ID file attached, or an already-saved
-  // member) must carry a name — otherwise it would be silently dropped on save,
-  // losing that person's ID upload / record. Flag the first offender by position.
+  // A save that ONLY removes people: after deleting the last guest, renderMembers
+  // re-seeds one blank row. That single leftover blank is the ONLY nameless row we
+  // tolerate, and only when it carries no content (no ID file) — see the loop below.
+  var deleteOnly = named.length === 0 && state.removeIds.length > 0;
+  // A completely empty form (no names, nothing to delete) is a no-op — nudge for a
+  // name. Checked BEFORE the per-row loop so an all-blank form gets this friendlier
+  // message rather than "name for Guest 1".
+  if (named.length === 0 && state.removeIds.length === 0) { msg(fm, "Please enter at least one name.", "err"); return; }
+  // Name is MANDATORY. Any row missing a name would be silently dropped on save
+  // (the payload is built from `named` only), losing that added guest / their ID
+  // upload — exactly the surprise we're preventing. Block on the first blank row.
+  // The ONE tolerated exception: the re-seeded empty row left after a pure delete,
+  // and only if it carries no ID file (an attached file must never be dropped).
   for (var mi = 0; mi < state.members.length; mi++) {
     var mm = state.members[mi];
-    if (memberEngaged(mm) && (mm.name || "").trim() === "") {
-      msg(fm, "Please enter a name for Guest " + (mi + 1) + " (or remove that guest).", "err"); return;
-    }
+    if ((mm.name || "").trim() !== "") continue;               // named -> fine
+    if (deleteOnly && !mm._file) continue;                     // tolerated leftover blank
+    flagMemberName(mi);
+    msg(fm, "Please enter a name for Guest " + (mi + 1) + " (or remove that guest).", "err"); return;
   }
-  // Allow a save that only removes people (named can be 0 if they're deleting);
-  // otherwise require at least one name so an empty form isn't a no-op save.
-  if (named.length === 0 && state.removeIds.length === 0) { msg(fm, "Please enter at least one name.", "err"); return; }
   if (!rsvp) { msg(fm, "Please choose whether your family will attend.", "err"); return; }
   // both-days families who are attending must pick at least one day
   if (state.invitedDays.length >= 2 && rsvp !== "No" && state.attendingDays.length === 0) {
