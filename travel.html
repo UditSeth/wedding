@@ -493,6 +493,13 @@ function whoMeansEveryone(who) {
   if (w === "") return true;
   return /^(everyone|everybody|whole family|entire family|full family|the family|family|us|all( \d+)?( of us)?)$/.test(w);
 }
+/* A leg whose "who" is BLANK is UNFILLED (nobody picked yet) — distinct from an
+   explicit everyone-keyword. In a SPLIT direction the newly-added journey starts
+   blank; treating that blank as "everyone" made it claim the whole roster and
+   disable every checkbox on the sibling journey (a full dead-lock). So blank must
+   claim NOBODY in the chip/mutual-exclusion logic. (A single, unsplit blank leg is
+   still shown as the whole-family banner — that path uses whoMeansEveryone, not this.) */
+function whoIsEmpty(who) { return normName(who) === ""; }
 function legNames(leg, roster) {
   var names = (roster || []).map(function (m) { return String((m && m.name) || ""); })
     .filter(function (n) { return n.trim() !== ""; });
@@ -874,8 +881,10 @@ function whoSelected(whoStr) {
    map {lowerName: "Arrival journey 2"} of names ALREADY claimed by OTHER legs in
    this direction, so this card can lock them out. Arrival and departure are
    independent — a name claimed for arrival stays free to pick for departure.
-   A whole-family leg (who blank) claims the ENTIRE roster; but the single, unsplit
-   whole-family journey never locks anyone (there are no siblings to conflict with). */
+   An explicit everyone-keyword leg claims the ENTIRE roster, but a BLANK "who" (a
+   freshly-split, not-yet-filled journey) claims NOBODY — otherwise it would lock every
+   checkbox on its sibling and dead-lock the split (issue 1). The single, unsplit journey
+   never locks anyone (there are no siblings to conflict with). */
 function claimedByOthers(dir, currentIdx) {
   var claimed = {};
   var items = legsForDir(dir);          // [{leg, idx}] in this direction, in order
@@ -883,8 +892,10 @@ function claimedByOthers(dir, currentIdx) {
   var all = rosterNames();
   items.forEach(function (it, n) {
     if (it.idx === currentIdx) return;  // skip THIS leg
-    var names = whoMeansEveryone(it.leg.who) ? all.slice()
-      : all.filter(function (nm) { return whoSelected(it.leg.who)[nm.toLowerCase()]; });
+    // A blank "who" is UNFILLED, not "everyone" — it claims nobody (see whoIsEmpty).
+    var names = whoIsEmpty(it.leg.who) ? []
+      : (whoMeansEveryone(it.leg.who) ? all.slice()
+        : all.filter(function (nm) { return whoSelected(it.leg.who)[nm.toLowerCase()]; }));
     var label = (dir === "Arrival" ? "arrival" : "departure") + " journey " + (n + 1);
     names.forEach(function (nm) { var k = nm.toLowerCase(); if (!claimed[k]) claimed[k] = label; });
   });
